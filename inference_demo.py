@@ -196,8 +196,8 @@ if __name__ == '__main__':
         torch.backends.cudnn.allow_tf32 = True
 
     parser = argparse.ArgumentParser('SAMWISE evaluation script', parents=[opts.get_args_parser()])
-    parser.add_argument('--input_path', default=None, type=str, required=True, help='path to mp4 video or frames folder')
-    parser.add_argument('--text_prompts', default=[''], type=str, required=True, nargs='+', help="List of referring expressions, separated by whitespace")
+    parser.add_argument('--input_path', default='/18018998051/Ref-AVS/data/REFAVS/media/--iSerV5DbY_68000_78000/frames', type=str, required=True, help='path to mp4 video or frames folder')
+    parser.add_argument('--text_prompts', default=['The hair-dryer in front of the man.'], type=str, required=True, nargs='+', help="List of referring expressions, separated by whitespace")
 
     args = parser.parse_args()
     check_args(args)
