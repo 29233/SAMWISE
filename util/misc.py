@@ -362,7 +362,7 @@ def nested_tensor_from_videos_list(videos_list: List[Tensor], size_divisibility=
         # the last two dims are [H, W], both subject to divisibility requirement
         max_size[-2] = (max_size[-2] + (stride - 1)) // stride * stride
         max_size[-1] = (max_size[-1] + (stride - 1)) // stride * stride
-
+    # 为一个batch内分辨率不一致的图像实现zero padding
     padded_batch_shape = [len(videos_list)] + max_size
     b, t, c, h, w = padded_batch_shape
     dtype = videos_list[0].dtype

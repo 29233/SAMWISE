@@ -30,7 +30,7 @@ class SAMWISE(nn.Module):
         super().__init__()
 
         self.text_encoder = text_encoder
-        self.tokenizer = RobertaTokenizerFast.from_pretrained('roberta-base')
+        self.tokenizer = RobertaTokenizerFast.from_pretrained('pretrain/roberta')
         self.sam = sam
         self.conditional_memory_encoder = conditional_memory_encoder
         if args.motion_prompt:
@@ -131,6 +131,7 @@ class SAMWISE(nn.Module):
 
     @staticmethod
     def preprocess_visual_features(samples, image_size):
+        # zero padding
         if not isinstance(samples, NestedTensor):
             samples = nested_tensor_from_videos_list(samples)
         samples, masks = samples.decompose()
@@ -153,7 +154,7 @@ class SAMWISE(nn.Module):
         return txt, attention_mask, input_ids
     
     def compute_backbone_output(self, samples, captions):
-        samples, BT, orig_size = self.preprocess_visual_features(samples, self.image_size)
+        samples, BT, orig_size = self.preprocess_visual_features(samples, self.image_size)  #image padding
         txt, attention_mask, input_ids = self.preprocess_text_features(captions)
 
         B, T = BT
