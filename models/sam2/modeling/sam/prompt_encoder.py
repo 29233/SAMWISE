@@ -204,4 +204,4 @@ class PromptEncoder(nn.Module):
                 bs, -1, self.image_embedding_size[0], self.image_embedding_size[1]
             )
 
-        return sparse_embeddings, dense_embeddings
+        return sparse_embeddings, dense_embeddings  # no mask embedding

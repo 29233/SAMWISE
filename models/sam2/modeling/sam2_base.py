@@ -345,7 +345,7 @@ class SAM2Base(torch.nn.Module):
             # Otherwise, simply feed None (and SAM's prompt encoder will add
             # a learned `no_mask_embed` to indicate no mask input in this case).
             sam_mask_prompt = None
-
+        #TODO prompt encoding不需要motion_inputs
         sparse_embeddings, dense_embeddings = self.sam_prompt_encoder(
             points=(sam_point_coords, sam_point_labels),
             boxes=None,

@@ -55,7 +55,7 @@ class SAMWISE(nn.Module):
         self.fusion_stages = fusion_stages
         self.image_size = image_size
 
-        self.use_cme_head = args.use_cme_head
+        self.use_cme_head = args.use_cme_head       # conditional memory head
         self.cme_decision_window = args.cme_decision_window # minimum number of frames between each CME application
         self.switch_mem = args.switch_mem
 
@@ -189,7 +189,7 @@ class SAMWISE(nn.Module):
             num_frames=memory_idx+1, # how many obj_ptr to take from mem
             memory_bank=memory_bank
         )
-        decoder_out: DecoderOutput = self.sam._forward_sam_heads(
+        decoder_out: DecoderOutput = self.sam._forward_sam_heads(    #TODO 解码不需要motion input
             backbone_features=pix_feat_with_mem,
             text_inputs=backbone_out.state[idx:idx+1],
             motion_inputs=backbone_out.motion_state[idx:idx+1] if self.motion_prompt else None,

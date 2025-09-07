@@ -45,6 +45,7 @@ class BackboneOutput:
     feat_sizes: list = None
     state: Tensor = None
     motion_state: Tensor = None
+    audio_feats: Tensor = None
 
     def get_current_feats(self, idx):
         current_vision_feats = [x[:, idx:idx + 1, :] for x in self.vision_feats]
