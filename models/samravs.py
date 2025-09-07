@@ -31,7 +31,7 @@ class SAMRAVS(nn.Module):
                  args
                  ):
         super().__init__()
-
+        self.sam = sam
         self.text_encoder = text_encoder
         self.tokenizer = RobertaTokenizerFast.from_pretrained('pretrain/roberta')
         self.text_encoder_embed_dim = text_encoder_embed_dim
@@ -102,7 +102,7 @@ class SAMRAVS(nn.Module):
 
     def forward(self, samples, captions, audios, targets):
         samples, (B, T), orig_size = self.preprocess_visual_features(samples, self.image_size)
-        backbone_out = self.sam.forward_images(samples)
+        backbone_out = self.sam.forward_image(samples)
         txt, attention_mask, input_ids = self.preprocess_text_features(captions)
         txt_state = txt[:,0]
         audio_embs = [self.preprocess_audio_features(wav_path) for wav_path in audios]
@@ -147,6 +147,96 @@ class SAMRAVS(nn.Module):
             return outputs
         else:
             return {"pred_masks": masks.squeeze(1)}
+
+    def compute_decoder_out_w_mem(self, backbone_out: BackboneOutput, idx: int, memory_idx: int, memory_bank: dict):
+        current_vision_feats = backbone_out.get_current_feats(idx)
+        current_vision_pos_embeds = backbone_out.get_current_pos_embeds(idx)
+        # take only the highest res feature map
+        high_res_features = backbone_out.get_high_res_features(current_vision_feats)
+
+        pix_feat_with_mem = self._prepare_memory_conditioned_features(
+            # it's absolute frame ID in eval, relative in the clip during train
+            frame_idx=memory_idx,
+            current_vision_feats=current_vision_feats[-1:],
+            current_vision_pos_embeds=current_vision_pos_embeds[-1:],
+            feat_sizes=backbone_out.feat_sizes[-1:],
+            num_frames=memory_idx + 1,  # how many obj_ptr to take from mem
+            memory_bank=memory_bank
+        )
+        # TODO
+        decoder_out: DecoderOutput = self.sam._forward_sam_heads(  # TODO 解码不需要motion input
+            backbone_features=pix_feat_with_mem,
+            text_inputs=backbone_out.state[idx:idx + 1],
+            audio_inputs=backbone_out.audio_feats[idx // backbone_out.T: idx // backbone_out.T + 1],
+            high_res_features=high_res_features,
+        )
+        decoder_out.compute_mask(self.image_size, backbone_out.orig_size[idx])
+        return decoder_out
+
+
+from models.path_utils import ROBERTA_WEIGHTS_PATH, SAM2_PATHS_CONFIG, SAM2_WEIGHTS_URL
+from models.path_utils import get_roberta_weights
+from towhee import pipe, ops
+
+
+def build_samravs(args):
+    if not os.path.isdir(ROBERTA_WEIGHTS_PATH):
+        get_roberta_weights()
+    # build text encoder
+    roberta = RobertaModel.from_pretrained(ROBERTA_WEIGHTS_PATH, checkpoint_file='model.pt')
+    text_encoder_embed_dim = roberta.model.encoder.lm_head.dense.out_features
+
+    sam2_weights, sam2_config = SAM2_PATHS_CONFIG[args.sam2_version]
+    if not os.path.isfile(sam2_weights):
+        print(f"Downloading SAM2-{args.sam2_version}")
+        py3_wget.download_file(SAM2_WEIGHTS_URL[args.sam2_version], sam2_weights)
+
+    # build sam2 image encoder and decoder
+    with initialize(version_base=None, config_path="sam2", job_name="test_app"):
+        cfg = compose(config_name=sam2_config, overrides=[f"++model.motion_prompt={args.motion_prompt}",
+                                                          f"++model.text_encoder_embed_dim={text_encoder_embed_dim}"])
+        OmegaConf.resolve(cfg)
+        cfg.model.pred_obj_scores = not args.disable_pred_obj_score
+        cfg.model.pred_obj_scores_mlp = not args.disable_pred_obj_score
+        cfg.model.fixed_no_obj_ptr = not args.disable_pred_obj_score
+        sam = instantiate(cfg.model, _recursive_=True)
+
+    state_dict = torch.load(sam2_weights, map_location="cpu")["model"]
+    sam.load_state_dict(state_dict, strict=False)
+    sam_embed_dim = cfg.model.image_encoder.neck.backbone_channel_list[::-1][1:]
+    audio_encoder = (   # pipeline building
+            pipe.input('path')
+                .map('path', 'frame', ops.audio_decode.ffmpeg())
+                .map('frame', 'vecs', ops.audio_embedding.vggish())
+                .output('vecs')
+        )
+    # build Conditional Memory Encoder
+    conditional_memory_encoder = ConditionalMemoryEncoder(sam.hidden_dim)
+
+    ## Samwise
+    model = SAMRAVS(
+        image_encoder_embed_dim=sam_embed_dim,
+        text_encoder=roberta,
+        text_encoder_embed_dim=text_encoder_embed_dim,
+        audio_encoder=audio_encoder,
+        audio_encoder_embed_dim=128,
+        fusion_stages_txt=args.fusion_stages_txt,
+        fusion_stages=args.fusion_stages,
+        image_size=sam.image_size,
+        sam=sam,
+        conditional_memory_encoder=conditional_memory_encoder,
+        adapter_dim=args.adapter_dim,
+        args=args
+    )
+
+    # freeze all the weights except CMT adapter and Conditional Memory Encoder
+    for param_name, param in model.named_parameters():
+        if 'adapter' not in param_name and 'conditional_memory_encoder' not in param_name and 'project_text' not in param_name:
+            param.requires_grad = False
+
+    os.environ["TOKENIZERS_PARALLELISM"] = "false"
+
+    return model
 
 
 

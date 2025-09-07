@@ -89,7 +89,7 @@ def extract_frames_from_mp4(video_path):
 def compute_masks(model, text_prompt, frames_folder, frames_list, ext):
     all_pred_masks = []
     vd = VideoEvalDataset(frames_folder, frames_list, ext=ext)
-    dl = DataLoader(vd, batch_size=args.eval_clip_window, num_workers=args.num_workers, shuffle=False)
+    dl = DataLoader(vd, batch_size=args.eval_clip_window, num_workers=0, shuffle=False)
     origin_w, origin_h = vd.origin_w, vd.origin_h
     # 3. for each clip
     for imgs, clip_frames_ids in tqdm(dl):

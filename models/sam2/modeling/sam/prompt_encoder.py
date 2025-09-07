@@ -23,7 +23,9 @@ class PromptEncoder(nn.Module):
         mask_in_chans: int,
         activation: Type[nn.Module] = nn.GELU,
         motion_prompt: bool = False,
+        audio_prompt: bool = False,
         text_encoder_embed_dim: int = 768
+
     ) -> None:
         """
         Encodes prompts for input to SAM's mask decoder.
@@ -69,6 +71,8 @@ class PromptEncoder(nn.Module):
         self.project_text = MLP(input_dim=text_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
         if motion_prompt:
             self.project_motion_prompts = MLP(input_dim=text_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
+        if audio_prompt:
+            self.project_audio_prompts = MLP(input_dim=text_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
 
     def get_dense_pe(self) -> torch.Tensor:
         """
@@ -131,6 +135,11 @@ class PromptEncoder(nn.Module):
         text_embedding = self.project_motion_prompts(text).unsqueeze(0)  # B, 1, C # if one "word"        
         return text_embedding
 
+    def _embed_audio(self, audio: torch.Tensor) -> torch.Tensor:
+        """Embeds audio prompts."""
+        audio_embedding = self.project_audio_prompts(audio).unsqueeze(0)
+        return audio_embedding
+
     def _get_batch_size(
         self,
         points: Optional[Tuple[torch.Tensor, torch.Tensor]],
@@ -158,7 +167,8 @@ class PromptEncoder(nn.Module):
         boxes: Optional[torch.Tensor],
         masks: Optional[torch.Tensor],
         text: Optional[torch.Tensor],
-        motion: Optional[torch.Tensor]
+        motion: Optional[torch.Tensor],
+        audio: Optional[torch.Tensor]
     ) -> Tuple[torch.Tensor, torch.Tensor]:
         """
         Embeds different types of prompts, returning both sparse and dense
@@ -196,6 +206,10 @@ class PromptEncoder(nn.Module):
         if motion is not None:
             motion_embeddings = self._embed_motion(motion)
             sparse_embeddings = torch.cat([sparse_embeddings, motion_embeddings], dim=1)
+
+        if audio is not None:
+            audio_embeddings = self._embed_audio(audio)
+            sparse_embeddings = torch.cat([sparse_embeddings, audio_embeddings], dim=1)
 
         if masks is not None:
             dense_embeddings = self._embed_masks(masks)

@@ -265,6 +265,7 @@ class SAM2Base(torch.nn.Module):
         self,
         backbone_features,
         text_inputs=None,
+        audio_inputs=None,
         motion_inputs=None,
         point_inputs=None,
         mask_inputs=None,
@@ -351,6 +352,7 @@ class SAM2Base(torch.nn.Module):
             boxes=None,
             text=text_inputs,
             motion = motion_inputs,
+            audio = audio_inputs,
             masks=sam_mask_prompt,
         )
         (

@@ -10,7 +10,7 @@ def get_args_parser():
                         help="Batch size for training")
     parser.add_argument('--batch_size_val', default=1, type=int,
                         help="Batch size for RIS evaluation")
-    parser.add_argument('--num_frames', default=8, type=int,
+    parser.add_argument('--num_frames', default=10, type=int,
                         help="Number of frames per training clip")
     parser.add_argument('--weight_decay', default=0, type=float,
                         help="Weight decay (L2 regularization)")
