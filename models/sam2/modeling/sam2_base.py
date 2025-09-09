@@ -94,7 +94,9 @@ class SAM2Base(torch.nn.Module):
         compile_image_encoder: bool = False,
         # ADDED BY ME
         motion_prompt: bool = False,
+        audio_prompt: bool = True,
         text_encoder_embed_dim: int = 768,
+        audio_encoder_embed_dim: int = 128,
         ## ADDED IN SAM2.1
         # add no obj embedding to spatial frames
         no_obj_embed_spatial: bool = False,
@@ -180,7 +182,9 @@ class SAM2Base(torch.nn.Module):
         self.use_mlp_for_obj_ptr_proj = use_mlp_for_obj_ptr_proj
         ## ADDED BY ME
         self.motion_prompt = motion_prompt
+        self.audio_prompt = audio_prompt
         self.text_encoder_embed_dim = text_encoder_embed_dim
+        self.audio_encoder_embed_dim = audio_encoder_embed_dim
         ####
         self._build_sam_heads()
         self.add_all_frames_to_correct_as_cond = add_all_frames_to_correct_as_cond
@@ -225,7 +229,9 @@ class SAM2Base(torch.nn.Module):
             input_image_size=(self.image_size, self.image_size),
             mask_in_chans=16,
             motion_prompt = self.motion_prompt,
-            text_encoder_embed_dim = self.text_encoder_embed_dim
+            audio_prompt=self.audio_prompt,
+            text_encoder_embed_dim = self.text_encoder_embed_dim,
+            audio_encoder_embed_dim = self.audio_encoder_embed_dim
         )
         self.sam_mask_decoder = MaskDecoder(
             num_multimask_outputs=3,

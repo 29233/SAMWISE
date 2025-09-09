@@ -24,7 +24,8 @@ class PromptEncoder(nn.Module):
         activation: Type[nn.Module] = nn.GELU,
         motion_prompt: bool = False,
         audio_prompt: bool = False,
-        text_encoder_embed_dim: int = 768
+        text_encoder_embed_dim: int = 768,
+        audio_encoder_embed_dim: int = 128
 
     ) -> None:
         """
@@ -72,7 +73,7 @@ class PromptEncoder(nn.Module):
         if motion_prompt:
             self.project_motion_prompts = MLP(input_dim=text_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
         if audio_prompt:
-            self.project_audio_prompts = MLP(input_dim=text_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
+            self.project_audio_prompts = MLP(input_dim=audio_encoder_embed_dim, hidden_dim=embed_dim, output_dim=embed_dim, num_layers=3)
 
     def get_dense_pe(self) -> torch.Tensor:
         """
@@ -208,6 +209,8 @@ class PromptEncoder(nn.Module):
             sparse_embeddings = torch.cat([sparse_embeddings, motion_embeddings], dim=1)
 
         if audio is not None:
+            # TODO audio process
+            audio = audio.mean(dim=1, keepdim=False)
             audio_embeddings = self._embed_audio(audio)
             sparse_embeddings = torch.cat([sparse_embeddings, audio_embeddings], dim=1)
 

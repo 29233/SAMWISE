@@ -6,6 +6,7 @@ from .ytvos import build as build_ytvos
 from .davis import build as build_davis
 from .refexp import build as build_refexp
 from .mevis import build as build_mevis
+from .dataset_refavs import build as build_refavs
 
 
 def get_coco_api_from_dataset(dataset):
@@ -23,6 +24,8 @@ def build_dataset(dataset_file: str, image_set: str, args):
         return build_ytvos(image_set, args)
     if dataset_file == 'davis':
         return build_davis(image_set, args)
+    if dataset_file == 'refavs':
+        return build_refavs(image_set, args)
     # for pretraining
     if dataset_file == "refcoco" or dataset_file == "refcoco+" or dataset_file == "refcocog":
         return build_refexp(dataset_file, image_set, args)

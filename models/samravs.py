@@ -137,10 +137,10 @@ class SAMRAVS(nn.Module):
                 current_vision_feats = backbone_output.get_current_feats(idx)
                 decoder_out_w_mem: DecoderOutput = self.compute_decoder_out_w_mem(backbone_output, idx, memory_idx,
                                                                                   self.memory_bank)
-            mem_dict_w_mem = self.compute_memory_bank_dict(decoder_out_w_mem, current_vision_feats,
-                                                           backbone_output.feat_sizes)
-            self.memory_bank[memory_idx] = mem_dict_w_mem
-            outputs["masks"].append(decoder_out_w_mem.masks)
+                mem_dict_w_mem = self.compute_memory_bank_dict(decoder_out_w_mem, current_vision_feats,
+                                                               backbone_output.feat_sizes)
+                self.memory_bank[memory_idx] = mem_dict_w_mem
+                outputs["masks"].append(decoder_out_w_mem.masks)
 
         masks = torch.cat(outputs["masks"])
         if self.training:
@@ -173,6 +173,125 @@ class SAMRAVS(nn.Module):
         decoder_out.compute_mask(self.image_size, backbone_out.orig_size[idx])
         return decoder_out
 
+    def _prepare_memory_conditioned_features(
+        self,
+        frame_idx,
+        current_vision_feats,
+        current_vision_pos_embeds,
+        feat_sizes,
+        num_frames,
+        memory_bank
+    ):
+        """Fuse the current frame's visual feature map with previous memory."""
+        B = current_vision_feats[-1].size(1)   # batch size on this frame: always 1
+        C = self.sam.hidden_dim
+        H, W = feat_sizes[-1]  # top-level (lowest-resolution) feature size
+        # The case of `self.num_maskmem == 0` below is primarily used for reproducing SAM on images.
+        # In this case, we skip the fusion with any memory.
+        if self.sam.num_maskmem == 0:  # Disable memory and skip fusion
+            pix_feat = current_vision_feats[-1].permute(1, 2, 0).view(B, C, H, W)
+            return pix_feat
+
+        num_obj_ptr_tokens = 0
+        # Step 1: condition the visual features of the current frame on previous memories
+        if frame_idx != 0:
+            # Retrieve the memories encoded with the maskmem backbone
+            to_cat_memory, to_cat_memory_pos_embed = [], []
+            t_pos_and_prevs = []
+            chosen_frames = [] # just for debug
+            for t_pos in range(1, self.sam.num_maskmem):
+                t_rel = self.sam.num_maskmem - t_pos  # how many frames before current frame
+                prev_frame_idx = frame_idx - t_rel
+                chosen_frames.append(prev_frame_idx) # just for the debug print below
+                t_pos_and_prevs.append((t_pos, memory_bank.get(prev_frame_idx, None)))
+            # print([tpp[0] for idd, tpp in enumerate(t_pos_and_prevs) if tpp[1] is not None])
+
+            for t_pos, prev in t_pos_and_prevs:
+                if prev is None:
+                    continue  # skip padding frames
+                feats = prev["maskmem_features"]
+                to_cat_memory.append(feats.flatten(2).permute(2, 0, 1))
+                maskmem_enc = prev["maskmem_pos_enc"][-1]
+                maskmem_enc = maskmem_enc.flatten(2).permute(2, 0, 1)
+                # Temporal positional encoding
+                tpos_enc_id = self.sam.num_maskmem - t_pos - 1
+                # TODO: this is a hack to use more frames than the pretrained maskmem_tpos_enc
+                # allows for. It uses the same encoding for all older frames; decide what to do
+                # with this
+                tpos_enc_id = min(tpos_enc_id, self.sam.maskmem_tpos_enc.shape[0] - 1)
+                maskmem_enc = (
+                    maskmem_enc + self.sam.maskmem_tpos_enc[tpos_enc_id]
+                )
+                to_cat_memory_pos_embed.append(maskmem_enc)
+
+            # Construct the list of past object pointers
+            if self.sam.use_obj_ptrs_in_encoder:
+                max_obj_ptrs_in_encoder = min(num_frames, self.sam.max_obj_ptrs_in_encoder)
+                # Add up to (max_obj_ptrs_in_encoder - 1) non-conditioning frames before current frame
+                pos_and_ptrs= []
+                for t_diff in range(1, max_obj_ptrs_in_encoder):
+                    t = frame_idx - t_diff
+                    if t < 0 or t >= num_frames:
+                        break
+                    out = memory_bank.get(t, None)
+                    if out is not None:
+                        pos_and_ptrs.append((t_diff, memory_bank[t]["obj_ptr"]))
+                # If we have at least one object pointer, add them to the across attention
+                if len(pos_and_ptrs) > 0:
+                    pos_list, ptrs_list = zip(*pos_and_ptrs)
+                    # stack object pointers along dim=0 into [ptr_seq_len, B, C] shape
+                    obj_ptrs = torch.stack(ptrs_list, dim=0)
+                    # a temporal positional embedding based on how far each object pointer is from
+                    # the current frame (sine embedding normalized by the max pointer num).
+                    obj_pos = obj_ptrs.new_zeros(len(pos_list), B, self.sam.mem_dim)
+                    if self.sam.mem_dim < C:
+                        # split a pointer into (C // self.mem_dim) tokens for self.mem_dim < C
+                        obj_ptrs = obj_ptrs.reshape(-1, B, C // self.sam.mem_dim, self.sam.mem_dim)
+                        obj_ptrs = obj_ptrs.permute(0, 2, 1, 3).flatten(0, 1)
+                        obj_pos = obj_pos.repeat_interleave(C // self.sam.mem_dim, dim=0)
+                    to_cat_memory.append(obj_ptrs)
+                    to_cat_memory_pos_embed.append(obj_pos)
+                    num_obj_ptr_tokens = obj_ptrs.shape[0]
+                else:
+                    num_obj_ptr_tokens = 0
+        else:
+            # for initial conditioning frames, encode them without using any previous memory
+            # directly add no-mem embedding (instead of using the transformer encoder)
+            pix_feat_with_mem = current_vision_feats[-1] + self.sam.no_mem_embed
+            pix_feat_with_mem = pix_feat_with_mem.permute(1, 2, 0).view(B, C, H, W)
+            return pix_feat_with_mem
+
+
+        # Step 2: Concatenate the memories and forward through the transformer encoder
+        memory = torch.cat(to_cat_memory, dim=0)
+        memory_pos_embed = torch.cat(to_cat_memory_pos_embed, dim=0)
+
+        pix_feat_with_mem = self.sam.memory_attention(
+            curr=current_vision_feats,
+            curr_pos=current_vision_pos_embeds,
+            memory=memory,
+            memory_pos=memory_pos_embed,
+            num_obj_ptr_tokens=num_obj_ptr_tokens,
+        )
+        # reshape the output (HW)BC => BCHW
+        pix_feat_with_mem = pix_feat_with_mem.permute(1, 2, 0).view(B, C, H, W)
+        return pix_feat_with_mem
+
+    def compute_memory_bank_dict(self, decoder_out: DecoderOutput, current_vision_feats, feat_sizes):
+        maskmem_features, maskmem_pos_enc = self.sam._encode_new_memory(
+            current_vision_feats=current_vision_feats,
+            feat_sizes=feat_sizes,
+            pred_masks_high_res=decoder_out.high_res_masks,
+            is_mask_from_pts=False,
+        )
+
+        memory_dict = {"maskmem_features": maskmem_features,
+            "maskmem_pos_enc": maskmem_pos_enc,
+            "pred_masks": decoder_out.low_res_masks,
+            "obj_ptr": decoder_out.obj_ptr,
+        }
+        return memory_dict
+
 
 from models.path_utils import ROBERTA_WEIGHTS_PATH, SAM2_PATHS_CONFIG, SAM2_WEIGHTS_URL
 from models.path_utils import get_roberta_weights
@@ -194,7 +313,9 @@ def build_samravs(args):
     # build sam2 image encoder and decoder
     with initialize(version_base=None, config_path="sam2", job_name="test_app"):
         cfg = compose(config_name=sam2_config, overrides=[f"++model.motion_prompt={args.motion_prompt}",
-                                                          f"++model.text_encoder_embed_dim={text_encoder_embed_dim}"])
+                                                          f"++model.text_encoder_embed_dim={text_encoder_embed_dim}",
+                                                          f"++model.audio_prompt={args.audio_prompt}",
+                                                          f"++model.audio_encoder_embed_dim={args.audio_encoder_embed_dim}"])
         OmegaConf.resolve(cfg)
         cfg.model.pred_obj_scores = not args.disable_pred_obj_score
         cfg.model.pred_obj_scores_mlp = not args.disable_pred_obj_score

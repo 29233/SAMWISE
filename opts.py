@@ -30,6 +30,8 @@ def get_args_parser():
                         help="Disable predicted object score")
     parser.add_argument('--motion_prompt', default=False, action='store_true',
                         help="Enable motion-based prompting")
+    parser.add_argument('--audio_prompt', default=True, action='store_true', help="Enable audio-based prompting")
+    parser.add_argument('--audio_encoder_embed_dim', default=128,)
 
     # Cross Modal Temporal Adapter settings
     parser.add_argument('--HSA', action='store_true', default=False,
@@ -57,8 +59,8 @@ def get_args_parser():
     # ['ytvos', 'davis', 'refcoco', 'refcoco+', 'refcocog', 'all']
     # 'all': using the three ref datasets for pretraining
 
-    parser.add_argument('--dataset_file', default='ytvos', type=str,
-                        help="Dataset to use: ['ytvos', 'davis', 'refcoco', 'refcoco+', 'refcocog', 'all']")
+    parser.add_argument('--dataset_file', default='refavs', type=str,
+                        help="Dataset to use: ['ytvos', 'davis', 'refcoco', 'refcoco+', 'refcocog', 'refavs', 'all']")
     parser.add_argument('--coco_path', type=str, default='data/coco',
                         help="Path to COCO dataset")
     parser.add_argument('--ytvos_path', type=str, default='data/ref-youtube-vos',
@@ -67,10 +69,14 @@ def get_args_parser():
                         help="Path to DAVIS dataset")
     parser.add_argument('--mevis_path', type=str, default='data/MeViS_release',
                         help="Path to MeViS dataset")
+    parser.add_argument('--refavs_path', type=str, default='/18018998051/Ref-AVS/data/REFAVS',
+                        help="Path to RefAVS dataset")
     parser.add_argument('--max_size', default=1024, type=int,
                         help="Frame size for preprocessing")
     parser.add_argument('--augm_resize', default=False, action='store_true',
                         help="Enable data augmentation with random resizing")
+    parser.add_argument("--text_max_len", type=int, default=25, help="Maximum textual reference length.")
+    parser.add_argument("--m2f_model", type=str, default='/18018998051/Ref-AVS/mask2former', help="Pretrained mask2former.")
 
     # General settings
     parser.add_argument('--output_dir', default='output', type=str,
@@ -89,7 +95,7 @@ def get_args_parser():
                         help="Epoch to start training from (for resuming)")
     parser.add_argument('--eval', action='store_true',
                         help="Run evaluation instead of training - for RIS only")
-    parser.add_argument('--num_workers', default=4, type=int,
+    parser.add_argument('--num_workers', default=0, type=int,
                         help="Number of worker threads for data loading")
     parser.add_argument('--no_distributed', action='store_true', default=False,
                         help="Disable distributed training")
@@ -97,7 +103,9 @@ def get_args_parser():
     # Testing and evaluation settings
     parser.add_argument('--threshold', default=0.5, type=float,
                         help="Threshold for binary mask predictions")
-    parser.add_argument('--split', default='valid', type=str, choices=['valid', 'valid_u', 'test'],
+    # parser.add_argument('--split', default='valid', type=str, choices=['valid', 'valid_u', 'test'],
+    #                     help="Dataset split for evaluation")
+    parser.add_argument('--split', default='valid', type=str, choices=['val', 'test_s', 'test_u', 'test_n'],
                         help="Dataset split for evaluation")
     parser.add_argument('--visualize', action='store_true',
                         help="Enable mask visualization during inference")
