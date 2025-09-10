@@ -31,7 +31,15 @@ def get_args_parser():
     parser.add_argument('--motion_prompt', default=False, action='store_true',
                         help="Enable motion-based prompting")
     parser.add_argument('--audio_prompt', default=True, action='store_true', help="Enable audio-based prompting")
-    parser.add_argument('--audio_encoder_embed_dim', default=128,)
+    parser.add_argument('--audio_encoder_embed_dim', default=128)
+
+    parser.add_argument('--pretrained_vggish_model_path', default='/18018998051/AVSegFormer/pretrained/vggish-10086976.pth', type=str,)
+    parser.add_argument('--pretrained_pca_params_path',
+                        default='/18018998051/AVSegFormer/pretrained/vggish_pca_params-970ea276.pth', type=str, )
+    parser.add_argument('--freeze_audio_extractor', default=True, action='store_true', )
+    parser.add_argument('--preprocess_audio_to_log_mel', default=False, action='store_true', )
+    parser.add_argument('--postprocess_log_mel_with_pca', default=False, action='store_true', )
+
 
     # Cross Modal Temporal Adapter settings
     parser.add_argument('--HSA', action='store_true', default=False,
@@ -105,7 +113,7 @@ def get_args_parser():
                         help="Threshold for binary mask predictions")
     # parser.add_argument('--split', default='valid', type=str, choices=['valid', 'valid_u', 'test'],
     #                     help="Dataset split for evaluation")
-    parser.add_argument('--split', default='valid', type=str, choices=['val', 'test_s', 'test_u', 'test_n'],
+    parser.add_argument('--split', default='val', type=str, choices=['val', 'test_s', 'test_u', 'test_n'],
                         help="Dataset split for evaluation")
     parser.add_argument('--visualize', action='store_true',
                         help="Enable mask visualization during inference")

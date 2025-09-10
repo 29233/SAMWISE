@@ -17,17 +17,11 @@ from transformers import RobertaTokenizerFast
 
 class SAMRAVS(nn.Module):
     def __init__(self,
-                 image_encoder_embed_dim,
                  text_encoder,
                  text_encoder_embed_dim,
                  audio_encoder,
-                 audio_encoder_embed_dim,
-                 fusion_stages_txt,
-                 fusion_stages,
                  image_size,
                  sam,
-                 conditional_memory_encoder,
-                 adapter_dim,
                  args
                  ):
         super().__init__()
@@ -35,11 +29,7 @@ class SAMRAVS(nn.Module):
         self.text_encoder = text_encoder
         self.tokenizer = RobertaTokenizerFast.from_pretrained('pretrain/roberta')
         self.text_encoder_embed_dim = text_encoder_embed_dim
-
-        # self.conditional_memory_encoder = conditional_memory_encoder
-
         self.audio_encoder = audio_encoder
-        #
         self.motion_prompt = args.motion_prompt
         if args.motion_prompt:
             self.nlp_dict = spacy.load("en_core_web_sm")
@@ -74,9 +64,11 @@ class SAMRAVS(nn.Module):
 
     def preprocess_audio_features(self, wav_path):
         """ wav string path. """
-        emb = torch.tensor(self.audio_encoder(wav_path).get()[0])
-        if emb.shape[0] == 10:
-            emb = emb.repeat(2, 1)
+
+        # emb = torch.tensor(self.audio_encoder(wav_path).get()[0])
+        # if emb.shape[0] == 10:
+        #     emb = emb.repeat(2, 1)
+        emb = self.audio_encoder(wav_path)
         # print(len(emb))
         return emb
 
@@ -293,6 +285,26 @@ class SAMRAVS(nn.Module):
         return memory_dict
 
 
+from models.torchvggish import vggish, vggish_input
+
+
+class audio_extractor(torch.nn.Module):
+    def __init__(self, args, device=None):
+        super(audio_extractor, self).__init__()
+        self.audio_backbone = vggish.VGGish(args, device)
+
+    def forward(self, audio_path):
+        audio = vggish_input.wavfile_to_examples(audio_path)
+        if audio.shape[0] != 10:
+            print('lm.shape: ', audio.shape)
+            N_SECONDS, CHANNEL, N_BINS, N_BANDS = audio.shape
+            new_lm_tensor = torch.zeros(5, CHANNEL, N_BINS, N_BANDS)
+            new_lm_tensor[:N_SECONDS] = audio
+            new_lm_tensor[N_SECONDS:] = audio[-1].repeat(5 - N_SECONDS, 1, 1, 1)
+            audio = new_lm_tensor
+        audio_fea = self.audio_backbone(audio.to(self.audio_backbone.device))
+        return audio_fea
+
 from models.path_utils import ROBERTA_WEIGHTS_PATH, SAM2_PATHS_CONFIG, SAM2_WEIGHTS_URL
 from models.path_utils import get_roberta_weights
 from towhee import pipe, ops
@@ -325,28 +337,23 @@ def build_samravs(args):
     state_dict = torch.load(sam2_weights, map_location="cpu")["model"]
     sam.load_state_dict(state_dict, strict=False)
     sam_embed_dim = cfg.model.image_encoder.neck.backbone_channel_list[::-1][1:]
-    audio_encoder = (   # pipeline building
-            pipe.input('path')
-                .map('path', 'frame', ops.audio_decode.ffmpeg())
-                .map('frame', 'vecs', ops.audio_embedding.vggish())
-                .output('vecs')
-        )
+    # audio_encoder = (   # pipeline building
+    #         pipe.input('path')
+    #             .map('path', 'frame', ops.audio_decode.ffmpeg())
+    #             .map('frame', 'vecs', ops.audio_embedding.vggish())
+    #             .output('vecs')
+    #     )
+    audio_encoder = audio_extractor(args)
     # build Conditional Memory Encoder
     conditional_memory_encoder = ConditionalMemoryEncoder(sam.hidden_dim)
 
     ## Samwise
     model = SAMRAVS(
-        image_encoder_embed_dim=sam_embed_dim,
         text_encoder=roberta,
         text_encoder_embed_dim=text_encoder_embed_dim,
         audio_encoder=audio_encoder,
-        audio_encoder_embed_dim=128,
-        fusion_stages_txt=args.fusion_stages_txt,
-        fusion_stages=args.fusion_stages,
         image_size=sam.image_size,
         sam=sam,
-        conditional_memory_encoder=conditional_memory_encoder,
-        adapter_dim=args.adapter_dim,
         args=args
     )
 

@@ -26,12 +26,12 @@ def train_one_epoch(model: torch.nn.Module,
 
     step=0
 
-    for samples, targets in metric_logger.log_every(data_loader, print_freq, header):
+    for samples, captions, audios, targets in metric_logger.log_every(data_loader, print_freq, header):
         step+=1
         model.train()
         samples = samples.to(device)
-        captions = [t["caption"] for t in targets]
-        outputs = model(samples, captions, targets)
+        # captions = [t["caption"] for t in targets]
+        outputs = model(samples, captions, audios, targets)
         losses = {}
         seg_loss = loss_masks(torch.cat(outputs["masks"]), targets, num_frames=samples.tensors.shape[1])
         losses.update(seg_loss)

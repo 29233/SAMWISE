@@ -46,16 +46,14 @@ class REFAVS(Dataset):
 
     def __getitem__(self, idx):
         df_one_video = self.metadata.iloc[idx]
-        vid, uid, fid, exp = df_one_video['vid'], df_one_video['uid'], df_one_video['fid'], df_one_video[
+        vid, uid, fid, caption = df_one_video['vid'], df_one_video['uid'], df_one_video['fid'], df_one_video[
             'exp']  # uid for vid.
         vid = uid.rsplit('_', 2)[0]  # TODO: use encoded id.
 
-        img_recs = []
-        mask_recs = []
         images = []
+        mask_recs = []
 
-        rec_audio = f'{self.media_path}/{vid}/audio.wav'
-        rec_text = exp
+        audio = f'{self.media_path}/{vid}/audio.wav'
 
         for _idx in range(self.frame_num):  # set frame_num as the batch_size
             # frame 
@@ -72,22 +70,23 @@ class REFAVS(Dataset):
             gt_binary_mask = torch.as_tensor(mask_cv2 > 0, dtype=torch.float32)
 
             # video frames collect
-            img_recs.append(image_inputs)
+            images.append(image_inputs)
             mask_recs.append(gt_binary_mask)
 
-        img_recs = torch.cat(img_recs)
+        images = torch.cat(images)
         mask_recs = torch.stack(mask_recs)
         target = {
             'frames_idx': list(range(0,10)),  # [T,]
             'masks': mask_recs,  # [T, H, W]
-            'caption': exp,
+            'caption': caption,
+            'audio': audio,
             'orig_size': torch.as_tensor(image_sizes),
             'size': torch.as_tensor(image_sizes),
             'video_id': vid,
             'exp_id': idx,
             'mask_id': fid
         }
-        return img_recs, target
+        return images, caption, audio, target
 
 def build(image_set, args):
     root = Path(args.refavs_path)

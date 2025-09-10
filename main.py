@@ -17,7 +17,7 @@ from util.misc import on_load_checkpoint
 import datasets.samplers as samplers
 from datasets import build_dataset
 from engine import train_one_epoch
-from models.samwise import build_samwise
+from models.samravs import build_samravs
 from os.path import join
 import sys
 import opts
@@ -46,7 +46,7 @@ def main(args):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    model = build_samwise(args)
+    model = build_samravs(args)
     model.to(device)
 
     model_without_ddp = model
