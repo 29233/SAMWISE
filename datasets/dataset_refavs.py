@@ -65,7 +65,7 @@ class REFAVS(Dataset):
             # mask label
             path_mask = f'{self.label_path}/{vid}/fid_{fid}/0000{_idx}.png'  # new
             mask_cv2 = cv2.imread(path_mask)
-            mask_cv2 = cv2.resize(mask_cv2, (256, 256))
+            mask_cv2 = cv2.resize(mask_cv2, (384, 384))
             mask_cv2 = cv2.cvtColor(mask_cv2, cv2.COLOR_BGR2GRAY)
             gt_binary_mask = torch.as_tensor(mask_cv2 > 0, dtype=torch.float32)
 
@@ -76,7 +76,7 @@ class REFAVS(Dataset):
         images = torch.cat(images)
         mask_recs = torch.stack(mask_recs)
         target = {
-            'frames_idx': list(range(0,10)),  # [T,]
+            'frame_ids': list(range(0,10)),  # [T,]
             'masks': mask_recs,  # [T, H, W]
             'caption': caption,
             'audio': audio,

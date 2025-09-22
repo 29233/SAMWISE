@@ -52,7 +52,7 @@ class SAMRAVS(nn.Module):
         return samples, BT, orig_size
 
     def preprocess_text_features(self, captions):
-        batch_encoding_text = self.tokenizer(captions, add_special_tokens=True, padding=True)
+        batch_encoding_text = self.tokenizer(captions, add_special_tokens=True, padding=True)   # 0:BOS 1:padding 2:EOS
         input_ids = torch.tensor(batch_encoding_text['input_ids']).cuda()
         attention_mask = torch.tensor(batch_encoding_text['attention_mask']).eq(0).cuda()
         text_encoder = self.text_encoder.model.encoder.sentence_encoder
@@ -359,7 +359,7 @@ def build_samravs(args):
 
     # freeze all the weights except CMT adapter and Conditional Memory Encoder
     for param_name, param in model.named_parameters():
-        if 'adapter' not in param_name and 'conditional_memory_encoder' not in param_name and 'project_text' not in param_name:
+        if 'adapter' not in param_name and 'conditional_memory_encoder' not in param_name and 'project_text' not in param_name and 'project_audio_prompts' not in param_name:
             param.requires_grad = False
 
     os.environ["TOKENIZERS_PARALLELISM"] = "false"

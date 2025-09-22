@@ -22,6 +22,7 @@ from os.path import join
 import sys
 import opts
 
+from peft import LoraConfig, get_peft_model
 
 def main(args):
     utils.init_distributed_mode(args)
@@ -47,6 +48,18 @@ def main(args):
     torch.backends.cudnn.benchmark = False
 
     model = build_samravs(args)
+
+    lora_config = LoraConfig(
+        r=8,  # 秩 (rank)，建议在4-32之间
+        lora_alpha=32,  # 缩放因子
+        target_modules=["qkv", "proj"],  # 需要微调的模块
+        lora_dropout=0.1,
+        bias="none",
+        task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+    )
+
+    model = get_peft_model(model, lora_config)
+
     model.to(device)
 
     model_without_ddp = model
