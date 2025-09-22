@@ -21,6 +21,7 @@ import opts
 from models.samravs import build_samravs
 from util.misc import on_load_checkpoint
 from datasets import build_dataset
+from util.misc import nested_tensor_from_tensor_list, interpolate
 from tools.metrics import db_eval_boundary, db_eval_iou
 from datasets.transform_utils import VideoEvalDataset
 from torch.utils.data import DataLoader
@@ -126,27 +127,26 @@ def save_with_stamp(model, test_loader, args):
         for batch_idx, batch_data in enumerate(progress_bar):
             # --- 1. 数据加载阶段 ---
             start_data = time.time()
-            sample, target = batch_data
-            mask_recs, fids, uids = batch_data
+            samples, captions, audios, targets= batch_data
+            samples = samples.to(torch.device(args.device))
             end_data = time.time()
             total_data_time += end_data - start_data
 
             # --- 2. 模型推理阶段 ---
             start_model = time.time()
-            _, vid_preds = model(sample)
-            mask_recs = [torch.stack(mask_rec, dim=0) for mask_rec in mask_recs]
-            vid_preds_t = torch.stack(vid_preds, dim=0).squeeze().cuda().view(-1, 1, 256, 256)
-            vid_masks_t = torch.stack(mask_recs, dim=0).squeeze().cuda().view(-1, 1, 256, 256)
-            pre_mask = vid_preds_t.view(len(uids), -1, 256, 256)
-            pred_mask = torch.sigmoid(pre_mask).cpu().numpy()
-            pred_mask = (pred_mask > 0.4).astype(np.uint8)
+            pred_mask = model(samples, captions, audios, targets)['pred_masks']
+            mask_recs = targets[0]['masks']
+            pred_mask = interpolate(pred_mask.unsqueeze(1), size=targets[0]['masks'].shape[-2:], mode="bilinear", align_corners=False)
+            pre_mask = pred_mask.view(-1, 256, 256)
+            pred_mask = torch.sigmoid(pre_mask).cpu()
+            # pred_mask = (pred_mask > 0.4).astype(np.uint8)
             end_model = time.time()
             total_model_time += end_model - start_model
 
             # --- 3. 指标计算阶段 ---
             start_metric = time.time()
-            miou = mask_iou(vid_preds_t, vid_masks_t)
-            F_score = Eval_Fmeasure(vid_preds_t, vid_masks_t, './logger', device=f'cuda:{args.gpu_id}')
+            miou = mask_iou(pred_mask, mask_recs)
+            F_score = Eval_Fmeasure(pred_mask, mask_recs, './logger', device=args.device)
             avg_meter_miou.add({'miou': miou})
             avg_meter_F.add({'F_score': F_score})
             end_metric = time.time()
@@ -154,8 +154,8 @@ def save_with_stamp(model, test_loader, args):
 
             # --- 4. mask 保存阶段 ---
             start_save = time.time()
-            for idx, (sample, uid, fid) in enumerate(zip(pred_mask, uids, fids)):
-                mask_path = f"{args.save_path}/{args.task}/{args.val}/{uid}/fid_{fid}"
+            for idx, (sample, target) in enumerate(zip(pred_mask, targets)):
+                mask_path = f"{args.output_dir}/{args.task}/{args.split}/{target['video_id']}/fid_{'mask_id'}"
                 if not os.path.exists(mask_path):
                     os.makedirs(mask_path)
                 for id, mask in enumerate(sample):
@@ -195,13 +195,13 @@ def mask_iou(pred, target, eps=1e-7, size_average=True):
             iou: size [1] (size_average=True) or [N] (size_average=False)
     """
     # return mask_iou_224(pred, target, eps=1e-7)
-    NF, bsz, H, W = pred.shape
-    pred = pred.view(NF*bsz, H, W)
-    target = target.view(NF*bsz, H, W)
+    # NF, bsz, H, W = pred.shape
+    # pred = pred.view(NF*bsz, H, W)
+    # target = target.view(NF*bsz, H, W)
     assert len(pred.shape) == 3 and pred.shape == target.shape
 
-    N = pred.size(0)
-    num_pixels = pred.size(-1) * pred.size(-2)
+    N = pred.shape[0]
+    num_pixels = pred.shape[-1] * pred.shape[-2]
     no_obj_flag = (target.sum(2).sum(1) == 0)
 
     temp_pred = torch.sigmoid(pred)
@@ -218,12 +218,12 @@ def mask_iou(pred, target, eps=1e-7, size_average=True):
     return iou
 
 def _eval_pr(y_pred, y, num, device='cuda'):
-    if device.startswith('cuda'):
-        prec, recall = torch.zeros(num).to(y_pred.device), torch.zeros(num).to(y_pred.device)
-        thlist = torch.linspace(0, 1 - 1e-10, num).to(y_pred.device)
-    else:
-        prec, recall = torch.zeros(num), torch.zeros(num)
-        thlist = torch.linspace(0, 1 - 1e-10, num)
+    # if device.startswith('cuda'):
+    #     prec, recall = torch.zeros(num).to(y_pred.device), torch.zeros(num).to(y_pred.device)
+    #     thlist = torch.linspace(0, 1 - 1e-10, num).to(y_pred.device)
+    # else:
+    prec, recall = torch.zeros(num), torch.zeros(num)
+    thlist = torch.linspace(0, 1 - 1e-10, num)
     for i in range(num):
         y_temp = (y_pred >= thlist[i]).float()
         tp = (y_temp * y).sum()
@@ -241,7 +241,7 @@ def Eval_Fmeasure(pred, gt, measure_path, pr_num=255, device='cuda'):
     """
 
     pred = torch.sigmoid(pred)
-    N = pred.size(0)
+    N = pred.shape[0]
     beta2 = 0.3
     avg_f, img_num = 0.0, 0
     score = torch.zeros(pr_num)

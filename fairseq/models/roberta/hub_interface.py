@@ -22,7 +22,9 @@ class RobertaHubInterface(nn.Module):
         self.cfg = cfg
         self.task = task
         self.model = model
-
+        # dict_keys(['_name', 'gpt2_encoder_json', 'gpt2_vocab_bpe'])
+        cfg.bpe['gpt2_encoder_json'] = r'/18018998051/SAMWISE/encoder.json'
+        cfg.bpe['gpt2_vocab_bpe'] = r'/18018998051/SAMWISE/vocab.bpe'
         self.bpe = encoders.build_bpe(cfg.bpe)
 
         # this is useful for determining the device
