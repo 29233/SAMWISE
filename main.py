@@ -52,10 +52,10 @@ def main(args):
     lora_config = LoraConfig(
         r=8,  # 秩 (rank)，建议在4-32之间
         lora_alpha=32,  # 缩放因子
-        target_modules=["qkv", "proj"],  # 需要微调的模块
+        target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
         lora_dropout=0.1,
         bias="none",
-        task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+        # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
     )
 
     model = get_peft_model(model, lora_config)
@@ -146,18 +146,39 @@ def main(args):
                     model, data_loader_train, optimizer, device, epoch,
                     args.clip_max_norm, lr_scheduler=lr_scheduler, args=args)
 
+        # if args.output_dir:
+        #     print("Save Model")
+        #     checkpoint_paths = [output_dir / 'checkpoint_latest.pth']
+        #     checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
+        #     for checkpoint_path in checkpoint_paths:
+        #         utils.save_on_master({
+        #             'model': model_without_ddp.state_dict(),
+        #             'optimizer': optimizer.state_dict(),
+        #             'lr_scheduler': lr_scheduler.state_dict(),
+        #             'epoch': epoch,
+        #             'args': args,
+        #         }, checkpoint_path)
+
         if args.output_dir:
             print("Save Model")
+            if hasattr(model, 'module'):
+                local_model = model.module
+            else:
+                local_model = model
             checkpoint_paths = [output_dir / 'checkpoint.pth']
             checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
             for checkpoint_path in checkpoint_paths:
+                    # 合并LoRA权重
+                # merged_model = local_model.merge_and_unload()
                 utils.save_on_master({
-                    'model': model_without_ddp.state_dict(),
-                    'optimizer': optimizer.state_dict(),
-                    'lr_scheduler': lr_scheduler.state_dict(),
-                    'epoch': epoch,
-                    'args': args,
-                }, checkpoint_path)
+                                'model': local_model.state_dict(),
+                                'optimizer': optimizer.state_dict(),
+                                'lr_scheduler': lr_scheduler.state_dict(),
+                                'epoch': epoch,
+                                'args': args,
+                            }, checkpoint_path)
+
+
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                      'epoch': epoch,

@@ -1,0 +1,2 @@
+cd /18018998051/SAMWISE
+/root/anaconda3/envs/mamba/bin/python -m torch.distributed.launch --nproc_per_node 2 --use_env main.py --resume /18018998051/SAMWISE/save/baseline/checkpoint0003.pth --dataset_file refavs --name_exp baseline --epochs 4 --batch_size 2 --output_dir save

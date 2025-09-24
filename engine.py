@@ -23,7 +23,7 @@ def train_one_epoch(model: torch.nn.Module,
     metric_logger = utils.MetricLogger(delimiter="  ")
     metric_logger.add_meter('lr', utils.SmoothedValue(window_size=1, fmt='{value:.6f}'))
     header = 'Epoch: [{}]'.format(epoch)
-    print_freq = 1
+    print_freq = 50
 
     step=0
 
@@ -74,7 +74,6 @@ def train_one_epoch(model: torch.nn.Module,
         metric_logger.update(loss=loss_value, **loss_dict_reduced_scaled, **loss_dict_reduced_unscaled)
         metric_logger.update(lr=optimizer.param_groups[0]["lr"])
         metric_logger.update(grad_norm=grad_total_norm)
-
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
