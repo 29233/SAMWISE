@@ -18,9 +18,11 @@ import datasets.samplers as samplers
 from datasets import build_dataset
 from engine import train_one_epoch
 from models.samravs import build_samravs
+from hydra.utils import instantiate
 from os.path import join
 import sys
 import opts
+from omegaconf import OmegaConf
 
 from peft import LoraConfig, get_peft_model
 
@@ -47,19 +49,19 @@ def main(args):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    model = build_samravs(args)
-
-    lora_config = LoraConfig(
-        r=8,  # 秩 (rank)，建议在4-32之间
-        lora_alpha=32,  # 缩放因子
-        target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
-        lora_dropout=0.1,
-        bias="none",
-        # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
-    )
-
-    model = get_peft_model(model, lora_config)
-
+    # model = build_samravs(args)
+    # lora_config = LoraConfig(
+    #     r=8,  # 秩 (rank)，建议在4-32之间
+    #     lora_alpha=32,  # 缩放因子
+    #     target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
+    #     lora_dropout=0.1,
+    #     bias="none",
+    #     # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+    # )
+    #
+    # model = get_peft_model(model, lora_config)
+    config = OmegaConf.load(args.config)
+    model = instantiate(config.model, _recursive_=True)
     model.to(device)
 
     model_without_ddp = model
@@ -226,6 +228,7 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('SAMWISE training and evaluation script', parents=[opts.get_args_parser()])
     args = parser.parse_args()
     name_exp = args.name_exp
+    args.config = 'models/sam2/sam2_configs/base.yaml'
     args.output_dir = os.path.join(args.output_dir, name_exp)
 
     main(args)

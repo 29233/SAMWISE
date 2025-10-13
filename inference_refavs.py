@@ -31,6 +31,8 @@ from engine import evaluate
 from models.postprocessors import build_postprocessors
 
 
+from peft import LoraConfig, get_peft_model
+
 # colormap
 color_list = colormap()
 color_list = color_list.astype('uint8').tolist()
@@ -67,6 +69,18 @@ def main(args):
     start_time = time.time()
     # model
     model = build_samravs(args)
+
+    lora_config = LoraConfig(
+        r=8,  # 秩 (rank)，建议在4-32之间
+        lora_alpha=32,  # 缩放因子
+        target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
+        lora_dropout=0.1,
+        bias="none",
+        # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+    )
+
+    model = get_peft_model(model, lora_config)
+
     device = torch.device(args.device)
     model.to(device)
 
@@ -87,6 +101,8 @@ def main(args):
             print('Missing Keys: {}'.format(missing_keys))
         if len(unexpected_keys) > 0:
             print('Unexpected Keys: {}'.format(unexpected_keys))
+
+    model = model.merge_and_unload()
 
     dataset_train = build_dataset(args.dataset_file, image_set=args.split, args=args)
     testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)

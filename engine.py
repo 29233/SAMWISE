@@ -10,10 +10,11 @@ import torch
 from pycocotools.coco import COCO
 from pycocotools.cocoeval import COCOeval
 from tools.metrics import calculate_precision_at_k_and_iou_metrics
+from tqdm import tqdm
 import util.misc as utils
 from torch.nn import functional as F
 from models.segmentation import loss_masks
-from tools.metrics import mask_iou
+from tools.metrics import mask_iou, Eval_Fmeasure
 
 def train_one_epoch(model: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
@@ -88,21 +89,30 @@ def evaluate(model, postprocessors, data_loader, device, args):
     header = 'Test:'
     predictions = []
     ious = []
-    for samples, captions, audios, targets in metric_logger.log_every(data_loader, 20, header):
-        # dataset_name = targets[0]["dataset_name"]
-        dataset_name = 'refavs'
-        samples = samples.to(device)
-        # captions = [t["caption"] for t in targets]
-        targets = utils.targets_to(targets, device)
+    F_scores=[]
+    with tqdm(data_loader) as pbar:
+        for samples, captions, audios, targets in pbar:
+            # dataset_name = targets[0]["dataset_name"]
+            dataset_name = 'refavs'
+            samples = samples.to(device)
+            # captions = [t["caption"] for t in targets]
+            targets = utils.targets_to(targets, device)
 
-        outputs = model(samples, captions, audios, targets)
-        pred_masks = outputs['pred_masks']
-        gt_masks = targets[0]['masks']
-        iou = mask_iou(pred_masks, gt_masks)
-        print('current iou for {}:'.format(targets[0]['video_id']), iou)
-        ious.append(iou)
-    miou = sum(iou) / len(iou)
+            outputs = model(samples, captions, audios, targets)
+            pred_masks = outputs['pred_masks']
+            gt_masks = targets[0]['masks']
+            iou = mask_iou(pred_masks, gt_masks)
+            f_score = Eval_Fmeasure(pred_masks, gt_masks)
+            ious.append(iou)
+            F_scores.append(f_score)
+            miou = sum(ious) / len(ious)
+            mF = sum(F_scores) / len(F_scores)
+            pbar.set_postfix(miou=f"{miou:.4f}", mF=f"{mF:.4f}")
+            pbar.update()
+    miou = sum(ious) / len(ious)
+    mF = sum(F_scores) / len(F_scores)
     print("miou:", miou)
+    print("mF:", mF)
     #     orig_target_sizes = torch.stack([t["orig_size"] for t in targets], dim=0)
     #     # results = postprocessors['bbox'](outputs, orig_target_sizes)
     #     if 'segm' in postprocessors.keys():
