@@ -15,7 +15,7 @@
     <option name="ADD_SOURCE_ROOTS" value="true" />
     <EXTENSION ID="PythonCoverageRunConfigurationExtension" runner="coverage.py" />
     <option name="SCRIPT_NAME" value="torch.distributed.launch" />
-    <option name="PARAMETERS" value="--nproc_per_node 2 --use_env main.py --resume pretrain/pretrained_model.pth --dataset_file refavs --name_exp baseline --epochs 2 --batch_size 4 --output_dir save2" />
+    <option name="PARAMETERS" value="--nproc_per_node 2 --use_env main.py --eval --config models/config/SVR_full.yaml --name_exp SVR_full --dataset_file refavs --epochs 20 --batch_size 4 --output_dir save" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="true" />

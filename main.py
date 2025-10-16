@@ -16,7 +16,7 @@ import util.misc as utils
 from util.misc import on_load_checkpoint
 import datasets.samplers as samplers
 from datasets import build_dataset
-from engine import train_one_epoch
+from engine import train_one_epoch, evaluate
 from models.samravs import build_samravs
 from hydra.utils import instantiate
 from os.path import join
@@ -93,6 +93,7 @@ def main(args):
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, args.lr_drop)
 
     dataset_train = build_dataset(args.dataset_file, image_set="train", args=args)
+    dataset_test = build_dataset(args.dataset_file, image_set="test_s ", args=args)
 
     args.batch_size = int(args.batch_size / args.ngpu)
     if args.distributed:
@@ -101,7 +102,7 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-
+    testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                    collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
@@ -132,12 +133,6 @@ def main(args):
                 lr_scheduler.base_lrs = list(map(lambda group: group['initial_lr'], optimizer.param_groups))
             lr_scheduler.step(lr_scheduler.last_epoch)
             args.start_epoch = checkpoint['epoch'] + 1
-
-
-    if args.motion_prompt:
-        # initialize projection weights for the MOTION prompt with those of CLS
-        mlp_weights = model_without_ddp.sam.sam_prompt_encoder.project_text.state_dict()
-        model_without_ddp.sam.sam_prompt_encoder.project_motion_prompts.load_state_dict(mlp_weights)
 
     print("Start training")
     start_time = time.time()
@@ -189,30 +184,9 @@ def main(args):
         if utils.is_main_process():
             with (output_dir / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")
-
-        if args.dataset_file == 'ytvos':
-            print("Evaluate on DAVIS: ")
-            from inference_davis import eval_davis
-            m = model
-            out_dir = join(args.output_dir, f'valid_epoch{str(epoch).zfill(2)}')
-            eval_davis(args, m, out_dir)
-        elif args.dataset_file == 'mevis':
-            m = model
-            print("Evaluate on MeVis: ")
-            from inference_mevis import eval_mevis
-            out_dir = join(args.output_dir, f'valid_epoch{str(epoch).zfill(2)}')
-            args.split = 'valid_u'
-            result = eval_mevis(args, m, out_dir, out_dir)
-
-            if utils.is_main_process():
-                out_str = f'Epoch: {epoch}:\nJ: {result[0]},\t F: {result[1]},\t J&F: {result[2]}'
-                print(out_str)
-                with (output_dir / "log.txt").open("a") as f:
-                    f.write(out_str + "\n")
-
-        if utils.is_main_process():
-            with (output_dir / "log.txt").open("a") as f:
-                f.write(json.dumps(log_stats) + "\n")
+        if args.eval and (epoch + 1) % 2 == 0:
+            print("Start evaluation")
+            evaluate(model, testloader, device)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

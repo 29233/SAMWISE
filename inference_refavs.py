@@ -114,12 +114,10 @@ def main(args):
     testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
     print('Start inference')
-    postprocessors = build_postprocessors()
     result = evaluate(model,
-                      postprocessors,
                       testloader,
-                      device,
-                      args)
+                      device
+                      )
 
     if args.split == 'valid_u':
         J_score, F_score, JF = result[0], result[1], result[2]
