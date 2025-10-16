@@ -179,8 +179,8 @@ class AVSegHead(nn.Module):
         y = torch.split(memory, split_size_or_sections, dim=dim)
         return y
 
-    def forward(self, feats, audio_feat):
-        feat14 = self.in_proj[0](feats[0])
+    def forward(self, feats, prompt_feat):
+        feat14 = self.in_proj[0](feats[0])      # 1/4 scale feature map
         srcs = [self.in_proj[i](feats[i]) for i in self.valid_indices]
         masks = [torch.zeros((x.size(0), x.size(2), x.size(
             3)), device=x.device, dtype=torch.bool) for x in srcs]
@@ -213,8 +213,8 @@ class AVSegHead(nn.Module):
         valid_ratios = torch.stack([self.get_valid_ratio(m) for m in masks], 1)
 
         # prepare queries
-        bs = audio_feat.shape[0]
-        query = self.query_generator(audio_feat)
+        bs = prompt_feat.shape[0]
+        query = self.query_generator(prompt_feat)
         if self.use_learnable_queries:
             query = query + \
                 self.learnable_query.weight[None, :, :].repeat(bs, 1, 1)
@@ -234,7 +234,7 @@ class AVSegHead(nn.Module):
                 mask_feature, size=cur_fpn.shape[-2:], mode='bilinear', align_corners=False)
         mask_feature = self.out_conv(mask_feature)
         if hasattr(self, 'fusion_block'):
-            mask_feature = self.fusion_block(mask_feature, audio_feat)
+            mask_feature = self.fusion_block(mask_feature, prompt_feat)
 
         # predict output mask
         pred_feature = torch.einsum(

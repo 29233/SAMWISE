@@ -86,10 +86,10 @@ def main(args):
 
     param_list = [{
         'params': head,
-        'initial_lr': args.lr
+        'lr': args.lr
     }]
 
-    optimizer = torch.optim.AdamW(param_list, lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(param_list, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, args.lr_drop)
 
     dataset_train = build_dataset(args.dataset_file, image_set="train", args=args)
@@ -148,37 +148,37 @@ def main(args):
                     model, data_loader_train, optimizer, device, epoch,
                     args.clip_max_norm, lr_scheduler=lr_scheduler, args=args)
 
-        # if args.output_dir:
-        #     print("Save Model")
-        #     checkpoint_paths = [output_dir / 'checkpoint_latest.pth']
-        #     checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
-        #     for checkpoint_path in checkpoint_paths:
-        #         utils.save_on_master({
-        #             'model': model_without_ddp.state_dict(),
-        #             'optimizer': optimizer.state_dict(),
-        #             'lr_scheduler': lr_scheduler.state_dict(),
-        #             'epoch': epoch,
-        #             'args': args,
-        #         }, checkpoint_path)
-
         if args.output_dir:
             print("Save Model")
-            if hasattr(model, 'module'):
-                local_model = model.module
-            else:
-                local_model = model
-            checkpoint_paths = [output_dir / 'checkpoint.pth']
+            checkpoint_paths = [output_dir / 'checkpoint_latest.pth']
             checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
             for checkpoint_path in checkpoint_paths:
-                    # 合并LoRA权重
-                # merged_model = local_model.merge_and_unload()
                 utils.save_on_master({
-                                'model': local_model.state_dict(),
-                                'optimizer': optimizer.state_dict(),
-                                'lr_scheduler': lr_scheduler.state_dict(),
-                                'epoch': epoch,
-                                'args': args,
-                            }, checkpoint_path)
+                    'model': model_without_ddp.state_dict(),
+                    'optimizer': optimizer.state_dict(),
+                    'lr_scheduler': lr_scheduler.state_dict(),
+                    'epoch': epoch,
+                    'args': args,
+                }, checkpoint_path)
+
+        # if args.output_dir:
+        #     print("Save Model")
+        #     if hasattr(model, 'module'):
+        #         local_model = model.module
+        #     else:
+        #         local_model = model
+        #     checkpoint_paths = [output_dir / 'checkpoint.pth']
+        #     checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
+        #     for checkpoint_path in checkpoint_paths:
+        #             # 合并LoRA权重
+        #         # merged_model = local_model.merge_and_unload()
+        #         utils.save_on_master({
+        #                         'model': local_model.state_dict(),
+        #                         'optimizer': optimizer.state_dict(),
+        #                         'lr_scheduler': lr_scheduler.state_dict(),
+        #                         'epoch': epoch,
+        #                         'args': args,
+        #                     }, checkpoint_path)
 
 
 
@@ -228,7 +228,6 @@ if __name__ == '__main__':
     parser = argparse.ArgumentParser('SAMWISE training and evaluation script', parents=[opts.get_args_parser()])
     args = parser.parse_args()
     name_exp = args.name_exp
-    args.config = 'models/sam2/sam2_configs/base.yaml'
     args.output_dir = os.path.join(args.output_dir, name_exp)
 
     main(args)

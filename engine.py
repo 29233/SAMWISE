@@ -35,7 +35,8 @@ def train_one_epoch(model: torch.nn.Module,
         # captions = [t["caption"] for t in targets]
         outputs = model(samples, captions, audios, targets)
         losses = {}
-        seg_loss = loss_masks(torch.cat(outputs["masks"]), targets, num_frames=samples.tensors.shape[1])
+        # seg_loss = loss_masks(torch.cat(outputs["masks"]), targets, num_frames=samples.tensors.shape[1])
+        seg_loss = loss_masks(outputs[0], targets, num_frames=samples.tensors.shape[1])
         losses.update(seg_loss)
         if args.use_cme_head and "pred_cme_logits" in outputs:
             weight = torch.tensor([1., 2.]).to(device)
@@ -99,7 +100,8 @@ def evaluate(model, postprocessors, data_loader, device, args):
             targets = utils.targets_to(targets, device)
 
             outputs = model(samples, captions, audios, targets)
-            pred_masks = outputs['pred_masks']
+            # pred_masks = outputs['pred_masks']
+            pred_masks = outputs[0].squeeze()
             gt_masks = targets[0]['masks']
             iou = mask_iou(pred_masks, gt_masks)
             f_score = Eval_Fmeasure(pred_masks, gt_masks)

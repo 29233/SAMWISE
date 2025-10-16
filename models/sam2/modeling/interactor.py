@@ -15,4 +15,16 @@ class Interactor(nn.Module):
         )
 
     def forward(self, x):
-        return self.layers(x)
+        B, T, N, C = x.shape
+        x = x.view(B, -1, C)
+        x = self.layers(x).view(B * T, -1, C)
+        return x
+
+class DummyInteractor(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, x):
+        B, T, N, C = x.shape
+        x = x.view(B*T, -1, C)
+        return x

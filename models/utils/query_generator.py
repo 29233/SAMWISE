@@ -71,3 +71,11 @@ def build_generator(type, **kwargs):
         return RepeatGenerator(**kwargs)
     else:
         raise ValueError
+
+class SimpleGenerator(nn.Module):
+    def __init__(self):
+        super().__init__()
+
+    def forward(self, prompt_feat):
+        prompt_feat = torch.mean(prompt_feat[:, -2:, :], dim=1, keepdim=True)
+        return prompt_feat

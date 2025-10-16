@@ -2,7 +2,7 @@
 
 # Model
 model:
-  _target_: models.base.EfficientBase
+  _target_: models.251014_base_v0.EfficientBase
   image_encoder:
     _target_: models.sam2.modeling.backbones.image_encoder.ImageEncoder
     scalp: 0
@@ -44,13 +44,6 @@ model:
     d_model: 256
     num_heads: 8
     num_layers: 6
-#  decoder:
-#    _target_: models.decoder.Mask2FormerMaskedAttentionDecoder，
-#    mask_feature_size: 384
-#    dropout: 0.1
-#    decoder_layers: 10
-#    hidden_dim: 256
-#    num_attention_heads: 8
   decoder:
     _target_: models.head.AVSegHead
     in_channels: [256, 256, 256, 256]

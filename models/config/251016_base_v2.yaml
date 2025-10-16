@@ -27,8 +27,8 @@ model:
       fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
       fpn_interp_model: nearest
   text_encoder:
-    _target_: fairseq.models.roberta.RobertaModel.from_pretrained
-    model_name_or_path: 'pretrain/roberta.base'
+    _target_: transformers.RobertaModel.from_pretrained
+    pretrained_model_name_or_path: 'pretrain/roberta'
   audio_encoder:
     _target_: models.torchvggish.vggish.VGGish2
     pretrained_vggish_model_path: '/18018998051/AVSegFormer/pretrained/vggish-10086976.pth'
@@ -44,21 +44,12 @@ model:
     d_model: 256
     num_heads: 8
     num_layers: 6
-#  decoder:
-#    _target_: models.decoder.Mask2FormerMaskedAttentionDecoder，
-#    mask_feature_size: 384
-#    dropout: 0.1
-#    decoder_layers: 10
-#    hidden_dim: 256
-#    num_attention_heads: 8
   decoder:
     _target_: models.head.AVSegHead
     in_channels: [256, 256, 256, 256]
     num_classes: 1
     query_num: 300
     use_learnable_queries: True
-    fusion_block:
-      _target_: models.utils.fusion_block.CrossModalMixer
     query_generator:
       _target_: models.utils.query_generator.AttentionGenerator
       num_layers: 6
@@ -84,7 +75,7 @@ model:
           dim: 256
           ffn_dim: 2048
           dropout: 0.1
-
+  hidden_dim: 256
   image_size: 384
   audio_feature_dim: 128
   text_feature_dim: 768

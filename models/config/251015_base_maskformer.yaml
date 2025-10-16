@@ -44,47 +44,42 @@ model:
     d_model: 256
     num_heads: 8
     num_layers: 6
-#  decoder:
-#    _target_: models.decoder.Mask2FormerMaskedAttentionDecoder，
-#    mask_feature_size: 384
-#    dropout: 0.1
-#    decoder_layers: 10
-#    hidden_dim: 256
-#    num_attention_heads: 8
   decoder:
-    _target_: models.head.AVSegHead
-    in_channels: [256, 256, 256, 256]
-    num_classes: 1
-    query_num: 300
-    use_learnable_queries: True
-    fusion_block:
-      _target_: models.utils.fusion_block.CrossModalMixer
-    query_generator:
-      _target_: models.utils.query_generator.AttentionGenerator
-      num_layers: 6
-      query_num: 300
-    positional_encoding:
-      _target_: models.utils.positional_encoding.SinePositionalEncoding
-      num_feats: 128
-    transformer:
-      _target_: models.utils.transformer.AVSTransformer
-      encoder:
-        _target_: models.utils.transformer.AVSTransformerEncoder
-        num_layers: 6
-        layer:
-          _target_: models.utils.transformer.AVSTransformerEncoderLayer
-          dim: 256
-          ffn_dim: 2048
-          dropout: 0.1
-      decoder:
-        _target_: models.utils.transformer.AVSTransformerDecoder
-        num_layers: 6
-        layer:
-          _target_: models.utils.transformer.AVSTransformerDecoderLayer
-          dim: 256
-          ffn_dim: 2048
-          dropout: 0.1
-
+    _target_: models.maskformer.meta_arch.mask_former_head.MaskFormerHead
+    idx_features: ['res2', 'res3', 'res4', 'res5']
+    channels: [256, 256, 256, 256]
+    strides: [4, 8, 16, 32]
+    ignore_value: 255
+    num_classes: 2
+    pixel_decoder:
+      _target_: models.maskformer.msdeformattn.MSDeformAttnPixelDecoder
+      idx_features: ['res2', 'res3', 'res4', 'res5']
+      channels: [256, 256, 256, 256]
+      strides: [4, 8, 16, 32]
+      transformer_dropout: 0.0
+      transformer_nheads: 8
+      transformer_dim_feedforward: 1024
+      transformer_enc_layers: 6
+      conv_dim: 256
+      mask_dim: 256
+      norm: "GN"
+      transformer_in_features: ["res3", "res4", "res5"]
+      common_stride: 4
+    loss_weight: 1.0
+    transformer_in_feature: "multi_scale_pixel_decoder"
+    transformer_predictor:
+        _target_: models.maskformer.transformer_decoder.mask2former_transformer_decoder.MultiScaleMaskedTransformerDecoder
+        in_channels: 256
+        mask_classification: True
+        num_classes: 2
+        hidden_dim: 256
+        num_queries: 100
+        nheads: 8
+        dim_feedforward: 2048
+        dec_layers: 9
+        pre_norm: False
+        mask_dim: 256
+        enforce_input_project: False
   image_size: 384
   audio_feature_dim: 128
   text_feature_dim: 768

@@ -44,21 +44,12 @@ model:
     d_model: 256
     num_heads: 8
     num_layers: 6
-#  decoder:
-#    _target_: models.decoder.Mask2FormerMaskedAttentionDecoder，
-#    mask_feature_size: 384
-#    dropout: 0.1
-#    decoder_layers: 10
-#    hidden_dim: 256
-#    num_attention_heads: 8
   decoder:
     _target_: models.head.AVSegHead
     in_channels: [256, 256, 256, 256]
     num_classes: 1
     query_num: 300
     use_learnable_queries: True
-    fusion_block:
-      _target_: models.utils.fusion_block.CrossModalMixer
     query_generator:
       _target_: models.utils.query_generator.AttentionGenerator
       num_layers: 6

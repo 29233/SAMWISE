@@ -21,6 +21,8 @@ def get_args_parser():
     parser.add_argument('--clip_max_norm', default=1, type=float,
                         help="Max norm for gradient clipping")
 
+    parser.add_argument('--config', default='models/config/251015_base_v1.yaml', type=str)
+
 
     # Image Encoder: SAM2
     # Model configuration
