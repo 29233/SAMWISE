@@ -1,0 +1,84 @@
+# @package _global_
+
+# Model
+model:
+  _target_: models.251014_base_v0.EfficientBase
+  image_encoder:
+    _target_: models.sam2.modeling.backbones.image_encoder.ImageEncoder
+    scalp: 0
+    trunk:
+      _target_: models.sam2.modeling.backbones.hieradet.Hiera
+      embed_dim: 144
+      num_heads: 2
+      stages: [2, 6, 36, 4]
+      global_att_blocks: [23, 33, 43]
+      window_pos_embed_bkg_spatial_size: [7, 7]
+      window_spec: [8, 4, 16, 8]
+    neck:
+      _target_: models.sam2.modeling.backbones.image_encoder.FpnNeck
+      position_encoding:
+        _target_: models.sam2.modeling.position_encoding.PositionEmbeddingSine
+        num_pos_feats: 256
+        normalize: true
+        scale: null
+        temperature: 10000
+      d_model: 256
+      backbone_channel_list: [1152, 576, 288, 144]
+      fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
+      fpn_interp_model: nearest
+  text_encoder:
+    _target_: fairseq.models.roberta.RobertaModel.from_pretrained
+    model_name_or_path: 'pretrain/roberta.base'
+  audio_encoder:
+    _target_: models.torchvggish.vggish.VGGish2
+    pretrained_vggish_model_path: '/18018998051/AVSegFormer/pretrained/vggish-10086976.pth'
+    pretrained_pca_params_path: '/18018998051/AVSegFormer/pretrained/vggish_pca_params-970ea276.pth'
+    freeze_audio_extractor: True
+    preprocess_audio_to_log_mel: False
+    postprocess_log_mel_with_pca: False
+  text_tokenizer:
+    _target_: transformers.RobertaTokenizerFast.from_pretrained
+    pretrained_model_name_or_path: 'pretrain/roberta'
+  interactor: # 特征交互层
+    _target_: models.sam2.modeling.interactor.Interactor
+    d_model: 256
+    num_heads: 8
+    num_layers: 6
+  decoder:
+    _target_: models.head.AVSegHead
+    in_channels: [256, 256, 256, 256]
+    num_classes: 1
+    query_num: 300
+    use_learnable_queries: True
+    fusion_block:
+      _target_: models.utils.fusion_block.CrossModalMixer
+    query_generator:
+      _target_: models.utils.query_generator.AttentionGenerator
+      num_layers: 6
+      query_num: 300
+    positional_encoding:
+      _target_: models.utils.positional_encoding.SinePositionalEncoding
+      num_feats: 128
+    transformer:
+      _target_: models.utils.transformer.AVSTransformer
+      encoder:
+        _target_: models.utils.transformer.AVSTransformerEncoder
+        num_layers: 6
+        layer:
+          _target_: models.utils.transformer.AVSTransformerEncoderLayer
+          dim: 256
+          ffn_dim: 2048
+          dropout: 0.1
+      decoder:
+        _target_: models.utils.transformer.AVSTransformerDecoder
+        num_layers: 6
+        layer:
+          _target_: models.utils.transformer.AVSTransformerDecoderLayer
+          dim: 256
+          ffn_dim: 2048
+          dropout: 0.1
+
+  image_size: 384
+  audio_feature_dim: 128
+  text_feature_dim: 768
+  image_encoder_checkpoint: '/18018998051/SAMWISE/pretrain/sam2_image_encoder_weights.pth'

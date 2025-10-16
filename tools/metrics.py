@@ -333,7 +333,7 @@ def _eval_pr(y_pred, y, num, device='cuda'):
     return prec, recall
 
 
-def Eval_Fmeasure(pred, gt, measure_path, pr_num=255, device='cuda'):
+def Eval_Fmeasure(pred, gt, pr_num=255, device='cuda'):
     r"""
         param:
             pred: size [N x H x W]

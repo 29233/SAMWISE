@@ -30,7 +30,11 @@ from datasets.transform_utils import vis_add_mask
 from towhee import pipe
 from engine import evaluate
 from models.postprocessors import build_postprocessors
+from omegaconf import OmegaConf
+from hydra.utils import instantiate
 
+
+from peft import LoraConfig, get_peft_model
 
 # colormap
 color_list = colormap()
@@ -66,8 +70,23 @@ def main(args):
         os.makedirs(save_visualize_path_prefix, exist_ok=True)
 
     start_time = time.time()
-    # model
-    model = build_samravs(args)
+    # # model
+    # model = build_samravs(args)
+    #
+    # lora_config = LoraConfig(
+    #     r=8,  # 秩 (rank)，建议在4-32之间
+    #     lora_alpha=32,  # 缩放因子
+    #     target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
+    #     lora_dropout=0.1,
+    #     bias="none",
+    #     # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+    # )
+    #
+    # model = get_peft_model(model, lora_config)
+
+    config = OmegaConf.load(args.config)
+    model = instantiate(config.model, _recursive_=True)
+
     device = torch.device(args.device)
     model.to(device)
 
@@ -88,6 +107,8 @@ def main(args):
             print('Missing Keys: {}'.format(missing_keys))
         if len(unexpected_keys) > 0:
             print('Unexpected Keys: {}'.format(unexpected_keys))
+
+    # model = model.merge_and_unload()
 
     dataset_train = build_dataset(args.dataset_file, image_set=args.split, args=args)
     testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)

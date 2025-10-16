@@ -172,3 +172,60 @@ class VGGish(VGG):
 
     def _postprocess(self, x):
         return self.pproc(x)
+
+class VGGish2(VGG):
+    def __init__(self,
+                 freeze_audio_extractor,
+                 pretrained_vggish_model_path,
+                 preprocess_audio_to_log_mel,
+                 postprocess_log_mel_with_pca,
+                 pretrained_pca_params_path,
+                 device=None):
+        super().__init__(make_layers())
+        if freeze_audio_extractor:
+            state_dict =  torch.load(pretrained_vggish_model_path)
+            super().load_state_dict(state_dict)
+
+        if device is None:
+            device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
+            print("device: ", device)
+        self.device = device
+
+        self.preprocess = preprocess_audio_to_log_mel
+        self.postprocess = postprocess_log_mel_with_pca
+        if self.postprocess:
+            self.pproc = Postprocessor()
+            if freeze_audio_extractor :
+                state_dict = torch.load(pretrained_pca_params_path)
+                # TODO: Convert the state_dict to torch
+                state_dict[vggish_params.PCA_EIGEN_VECTORS_NAME] = torch.as_tensor(
+                    state_dict[vggish_params.PCA_EIGEN_VECTORS_NAME], dtype=torch.float
+                )
+                state_dict[vggish_params.PCA_MEANS_NAME] = torch.as_tensor(
+                    state_dict[vggish_params.PCA_MEANS_NAME].reshape(-1, 1), dtype=torch.float
+                )
+                self.pproc.load_state_dict(state_dict)
+        self.to(self.device)
+
+    def forward(self, x):
+        if self.preprocess:
+            print(">>> pre processing...")
+            x = self._preprocess(x)
+            x = x.to(self.device)
+        x = VGG.forward(self, x)
+        if self.postprocess:
+            print(">>> post processing...")
+            x = self._postprocess(x)
+        return x
+
+    def _preprocess(self, x):
+        # if isinstance(x, np.ndarray):
+        #     x = vggish_input.waveform_to_examples(x, fs)
+        if isinstance(x, str):
+            x = vggish_input.wavfile_to_examples(x)
+        else:
+            raise AttributeError
+        return x
+
+    def _postprocess(self, x):
+        return self.pproc(x)

@@ -18,9 +18,11 @@ import datasets.samplers as samplers
 from datasets import build_dataset
 from engine import train_one_epoch
 from models.samravs import build_samravs
+from hydra.utils import instantiate
 from os.path import join
 import sys
 import opts
+from omegaconf import OmegaConf
 
 from peft import LoraConfig, get_peft_model
 
@@ -47,19 +49,19 @@ def main(args):
     torch.backends.cudnn.deterministic = True
     torch.backends.cudnn.benchmark = False
 
-    model = build_samravs(args)
-
-    lora_config = LoraConfig(
-        r=8,  # 秩 (rank)，建议在4-32之间
-        lora_alpha=32,  # 缩放因子
-        target_modules=["qkv", "proj"],  # 需要微调的模块
-        lora_dropout=0.1,
-        bias="none",
-        task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
-    )
-
-    model = get_peft_model(model, lora_config)
-
+    # model = build_samravs(args)
+    # lora_config = LoraConfig(
+    #     r=8,  # 秩 (rank)，建议在4-32之间
+    #     lora_alpha=32,  # 缩放因子
+    #     target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
+    #     lora_dropout=0.1,
+    #     bias="none",
+    #     # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
+    # )
+    #
+    # model = get_peft_model(model, lora_config)
+    config = OmegaConf.load(args.config)
+    model = instantiate(config.model, _recursive_=True)
     model.to(device)
 
     model_without_ddp = model
@@ -84,10 +86,10 @@ def main(args):
 
     param_list = [{
         'params': head,
-        'initial_lr': args.lr
+        'lr': args.lr
     }]
 
-    optimizer = torch.optim.AdamW(param_list, lr=args.lr, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(param_list, weight_decay=args.weight_decay)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, args.lr_drop)
 
     dataset_train = build_dataset(args.dataset_file, image_set="train", args=args)
@@ -148,7 +150,7 @@ def main(args):
 
         if args.output_dir:
             print("Save Model")
-            checkpoint_paths = [output_dir / 'checkpoint.pth']
+            checkpoint_paths = [output_dir / 'checkpoint_latest.pth']
             checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
             for checkpoint_path in checkpoint_paths:
                 utils.save_on_master({
@@ -158,6 +160,27 @@ def main(args):
                     'epoch': epoch,
                     'args': args,
                 }, checkpoint_path)
+
+        # if args.output_dir:
+        #     print("Save Model")
+        #     if hasattr(model, 'module'):
+        #         local_model = model.module
+        #     else:
+        #         local_model = model
+        #     checkpoint_paths = [output_dir / 'checkpoint.pth']
+        #     checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
+        #     for checkpoint_path in checkpoint_paths:
+        #             # 合并LoRA权重
+        #         # merged_model = local_model.merge_and_unload()
+        #         utils.save_on_master({
+        #                         'model': local_model.state_dict(),
+        #                         'optimizer': optimizer.state_dict(),
+        #                         'lr_scheduler': lr_scheduler.state_dict(),
+        #                         'epoch': epoch,
+        #                         'args': args,
+        #                     }, checkpoint_path)
+
+
 
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                      'epoch': epoch,
