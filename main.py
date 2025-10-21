@@ -86,14 +86,14 @@ def main(args):
 
     param_list = [{
         'params': head,
-        'lr': args.lr
+        'initial_lr': args.lr
     }]
 
-    optimizer = torch.optim.AdamW(param_list, weight_decay=args.weight_decay)
+    optimizer = torch.optim.AdamW(param_list, weight_decay=args.weight_decay, lr=args.lr)
     lr_scheduler = torch.optim.lr_scheduler.MultiStepLR(optimizer, args.lr_drop)
 
     dataset_train = build_dataset(args.dataset_file, image_set="train", args=args)
-    dataset_test = build_dataset(args.dataset_file, image_set="test_s ", args=args)
+    dataset_test = build_dataset(args.dataset_file, image_set=args.split, args=args)
 
     args.batch_size = int(args.batch_size / args.ngpu)
     if args.distributed:
@@ -102,7 +102,7 @@ def main(args):
         sampler_train = torch.utils.data.RandomSampler(dataset_train)
 
     batch_sampler_train = torch.utils.data.BatchSampler(sampler_train, args.batch_size, drop_last=True)
-    testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+    testloader = DataLoader(dataset_test, collate_fn=utils.collate_fn, num_workers=args.num_workers)
     data_loader_train = DataLoader(dataset_train, batch_sampler=batch_sampler_train,
                                    collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
@@ -155,32 +155,9 @@ def main(args):
                     'epoch': epoch,
                     'args': args,
                 }, checkpoint_path)
-
-        # if args.output_dir:
-        #     print("Save Model")
-        #     if hasattr(model, 'module'):
-        #         local_model = model.module
-        #     else:
-        #         local_model = model
-        #     checkpoint_paths = [output_dir / 'checkpoint.pth']
-        #     checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
-        #     for checkpoint_path in checkpoint_paths:
-        #             # 合并LoRA权重
-        #         # merged_model = local_model.merge_and_unload()
-        #         utils.save_on_master({
-        #                         'model': local_model.state_dict(),
-        #                         'optimizer': optimizer.state_dict(),
-        #                         'lr_scheduler': lr_scheduler.state_dict(),
-        #                         'epoch': epoch,
-        #                         'args': args,
-        #                     }, checkpoint_path)
-
-
-
         log_stats = {**{f'train_{k}': v for k, v in train_stats.items()},
                      'epoch': epoch,
                      'n_parameters': n_parameters_tot}
-
         if utils.is_main_process():
             with (output_dir / "log.txt").open("a") as f:
                 f.write(json.dumps(log_stats) + "\n")

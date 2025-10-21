@@ -396,6 +396,7 @@ def get_mel(audio_data, audio_cfg):
     # )
     # we use log mel spectrogram as input
     mel = torchaudio.transforms.AmplitudeToDB(top_db=None)(mel)
+    # TODO 直接在此处按时间拆分，提取出1001帧特征，截取前1000帧，每100帧对应一秒
     return mel.T  # (T, n_mels)
 
 
@@ -464,7 +465,7 @@ def get_audio_features(sample, audio_data, max_len, data_truncating, data_fillin
                 )
             # random crop to max_len (for compatibility)
             overflow = len(audio_data) - max_len
-            idx = np.random.integers(0, overflow + 1)
+            idx = np.random.default_rng().integers(0, overflow + 1)
             audio_data = audio_data[idx: idx + max_len]
 
         else:  # padding if too short

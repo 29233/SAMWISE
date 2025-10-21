@@ -102,3 +102,38 @@ def evaluate(model, data_loader, device):
         # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print("Averaged stats:", metric_logger)
+
+
+@torch.no_grad()
+def evaluate_org(model, postprocessors, data_loader, device, args):
+    model.eval()
+
+    metric_logger = utils.MetricLogger(delimiter="  ")
+    header = 'Test:'
+    predictions = []
+    ious = []
+    F_scores=[]
+    with tqdm(data_loader) as pbar:
+        for samples, captions, audios, targets in pbar:
+            # dataset_name = targets[0]["dataset_name"]
+            dataset_name = 'refavs'
+            samples = samples.to(device)
+            # captions = [t["caption"] for t in targets]
+            targets = utils.targets_to(targets, device)
+
+            outputs = model(samples, captions, audios, targets)
+            # pred_masks = outputs['pred_masks']
+            pred_masks = outputs[0].squeeze()
+            gt_masks = targets[0]['masks']
+            iou = mask_iou(pred_masks, gt_masks)
+            f_score = Eval_Fmeasure(pred_masks, gt_masks)
+            ious.append(iou)
+            F_scores.append(f_score)
+            miou = sum(ious) / len(ious)
+            mF = sum(F_scores) / len(F_scores)
+            pbar.set_postfix(miou=f"{miou:.4f}", mF=f"{mF:.4f}")
+            pbar.update()
+    miou = sum(ious) / len(ious)
+    mF = sum(F_scores) / len(F_scores)
+    print("miou:", miou)
+    print("mF:", mF)

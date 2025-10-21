@@ -27,8 +27,7 @@ class EfficientBase(nn.Module):
                  image_size,
                  audio_feature_dim,
                  text_feature_dim,
-                 image_encoder_checkpoint,
-                 hidden_dim = 256
+                 image_encoder_checkpoint
                  ):
         super().__init__()
         self. image_encoder = image_encoder
@@ -39,9 +38,9 @@ class EfficientBase(nn.Module):
         self.decoder = decoder
         self.image_size = image_size
 
-        self.audio_projecter = nn.Linear(audio_feature_dim, hidden_dim)
-        self.text_projecter = nn.Linear(text_feature_dim, hidden_dim)
-        self.hidden_dim = hidden_dim
+        self.audio_projecter = nn.Linear(audio_feature_dim, self.interactor.d_model)
+        self.text_projecter = nn.Linear(text_feature_dim, self.interactor.d_model)
+
         # load image encoder parameters
         self.image_encoder.load_state_dict(torch.load(image_encoder_checkpoint, map_location='cpu'), strict=True)
         # set encoders frozen
@@ -69,14 +68,12 @@ class EfficientBase(nn.Module):
         batch_encoding_text = self.text_tokenizer(captions, add_special_tokens=True, padding=True)   # 0:BOS 1:padding 2:EOS
         input_ids = torch.tensor(batch_encoding_text['input_ids']).cuda()
         attention_mask = torch.tensor(batch_encoding_text['attention_mask']).eq(0).cuda()
-        txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)["pooler_output"]
-        txt_prompt = self.text_projecter(txt_state)
-        return txt_prompt
-        # has_pads = (torch.tensor(input_ids.device.type == "xla") or attention_mask.any())
-        # x, encoder_embedding = text_encoder.forward_embedding(input_ids, None)
-        # txt = x * (1 - attention_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x))
-        # # txt = x.transpose(0, 1)  # B x T x C -> T x B x C
-        # return txt, attention_mask, input_ids
+        text_encoder = self.text_encoder.model.encoder.sentence_encoder
+        has_pads = (torch.tensor(input_ids.device.type == "xla") or attention_mask.any())
+        x, encoder_embedding = text_encoder.forward_embedding(input_ids, None)
+        txt = x * (1 - attention_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x))
+        # txt = x.transpose(0, 1)  # B x T x C -> T x B x C
+        return txt, attention_mask, input_ids
 
     def preprocess_audio_features(self, wav_path):
         """ wav string path. """
@@ -119,16 +116,31 @@ class EfficientBase(nn.Module):
     def forward(self, samples, captions, audios, targets):
         samples, (B, T), orig_size = self.preprocess_visual_features(samples, self.image_size)
         backbone_out = self.image_encoder(samples)
-        txt_embed = self.preprocess_text_features(captions)
+        txt, attention_mask, input_ids = self.preprocess_text_features(captions)
+        txt_state = txt[:,0]
         audio_embs = [self.preprocess_audio_features(wav_path) for wav_path in audios]
         audio_embs = torch.stack(audio_embs, dim=0).unsqueeze(2).cuda()
         audio_embs = self.audio_projecter(audio_embs)
+        txt_state = self.text_projecter(txt_state.unsqueeze(1).unsqueeze(1)).repeat(1, T, 1, 1)
         vision_features, vision_pos_enc, backbone_fpn = backbone_out['vision_features'], backbone_out['vision_pos_enc'], backbone_out['backbone_fpn']
-        txt_prompt = txt_embed.view(B,1,1,-1).repeat(1, T, 1, 1)
-        _vision_features = vision_features.flatten(-2).permute(0, 2, 1).view(B, T, -1, self.hidden_dim)
-        omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
-        prompt_embeds = self.interactor(omni_rep)
-        mask = self.decoder(backbone_fpn, prompt_embeds)
+
+        _vision_features = vision_features.flatten(-2).permute(0, 2, 1).view(B, T, -1, self.interactor.d_model)
+        omni_rep = torch.cat([_vision_features, audio_embs, txt_state], dim=-2)
+        B, T, N, C = omni_rep.shape
+        omni_rep = omni_rep.view(B, -1, C)
+        omni_rep = self.interactor(omni_rep)
+        audio_embs = omni_rep.view(B, T, N, C)[:, :, :N - 1].mean(dim=2)
+        enc_feats = {
+            'res2': backbone_fpn[0],
+            'res3': backbone_fpn[1],
+            'res4': backbone_fpn[2],
+            'res5': backbone_fpn[3],
+        }
+        mask = self.decoder(enc_feats)
+
+
+
+        # if self.training:
         return mask
 
     def compute_decoder_out_w_mem(self, backbone_out: BackboneOutput, idx: int, memory_idx: int, memory_bank: dict):
@@ -314,7 +326,7 @@ def build_samravs(args):
         py3_wget.download_file(SAM2_WEIGHTS_URL[args.sam2_version], sam2_weights)
 
     # build sam2 image encoder and decoder
-    with initialize(version_base=None, config_path="sam2", job_name="test_app"):
+    with initialize(version_base=None, config_path="../sam2", job_name="test_app"):
         cfg = compose(config_name=sam2_config, overrides=[f"++model.motion_prompt={args.motion_prompt}",
                                                           f"++model.text_encoder_embed_dim={text_encoder_embed_dim}",
                                                           f"++model.audio_prompt={args.audio_prompt}",

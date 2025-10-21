@@ -1,8 +1,8 @@
-# @package _global_
+ # @package _global_
 
 # Model
 model:
-  _target_: models.EfBase.251014_base_v0.EfficientBase
+  _target_: models.EfBase.base.EfficientBase
   image_encoder:
     _target_: models.sam2.modeling.backbones.image_encoder.ImageEncoder
     scalp: 0
@@ -27,8 +27,8 @@ model:
       fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
       fpn_interp_model: nearest
   text_encoder:
-    _target_: fairseq.models.roberta.RobertaModel.from_pretrained
-    model_name_or_path: 'pretrain/roberta.base'
+    _target_: transformers.RobertaModel.from_pretrained
+    pretrained_model_name_or_path: 'pretrain/roberta'
   audio_encoder:
     _target_: models.torchvggish.vggish.VGGish2
     pretrained_vggish_model_path: '/18018998051/AVSegFormer/pretrained/vggish-10086976.pth'
@@ -40,18 +40,16 @@ model:
     _target_: transformers.RobertaTokenizerFast.from_pretrained
     pretrained_model_name_or_path: 'pretrain/roberta'
   interactor: # 特征交互层
-    _target_: models.sam2.EfBase.interactor.Interactor
+    _target_: models.sam2.modeling.interactor.Interactor
     d_model: 256
     num_heads: 8
-    num_layers: 6
+    num_layers: 4
   decoder:
     _target_: models.EfBase.head.AVSegHead
     in_channels: [256, 256, 256, 256]
     num_classes: 1
     query_num: 300
     use_learnable_queries: True
-    fusion_block:
-      _target_: models.EfBase.utils.fusion_block.CrossModalMixer
     query_generator:
       _target_: models.EfBase.utils.query_generator.AttentionGenerator
       num_layers: 6
@@ -63,7 +61,7 @@ model:
       _target_: models.EfBase.utils.transformer.AVSTransformer
       encoder:
         _target_: models.EfBase.utils.transformer.AVSTransformerEncoder
-        num_layers: 6
+        num_layers: 4
         layer:
           _target_: models.EfBase.utils.transformer.AVSTransformerEncoderLayer
           dim: 256
