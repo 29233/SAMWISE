@@ -77,6 +77,7 @@ class AVSegHead(nn.Module):
                  embed_dim=256,
                  valid_indices=[1, 2, 3],
                  scale_factor=4,
+                 replace=False,
                  positional_encoding=None,
                  use_learnable_queries=True,
                  fusion_block=None) -> None:
@@ -93,7 +94,7 @@ class AVSegHead(nn.Module):
         self.level_embed = nn.Parameter(
             torch.Tensor(self.num_feats, embed_dim))
         self.learnable_query = nn.Embedding(query_num, embed_dim)
-
+        self.replace = replace
         self.query_generator = query_generator
 
         self.transformer = transformer
@@ -180,6 +181,8 @@ class AVSegHead(nn.Module):
 
     def forward(self, feats, prompt_feat):
         feat14 = self.in_proj[0](feats[0])      # 1/4 scale feature map
+        if self.replace:
+            feats[-1] = prompt_feat[:, :-2, :].permute(0, 2, 1).view(feats[-1].shape)
         srcs = [self.in_proj[i](feats[i]) for i in self.valid_indices]
         masks = [torch.zeros((x.size(0), x.size(2), x.size(
             3)), device=x.device, dtype=torch.bool) for x in srcs]

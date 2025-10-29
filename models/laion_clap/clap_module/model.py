@@ -503,7 +503,7 @@ class CLAP(nn.Module):
                 nn.Linear(self.joint_embed_shape, self.joint_embed_shape)
             )
         elif text_cfg.model_type == "roberta":
-            self.text_branch = RobertaModel.from_pretrained('/18018998051/SAMWISE/pretrain/roberta')
+            self.text_branch = RobertaModel.from_pretrained('/18018998051/SAMWISE/pretrain/roberta-base')
             self.text_transform = MLPLayers(units=[self.joint_embed_shape,
                                                    self.joint_embed_shape,
                                                    self.joint_embed_shape], dropout=0.1)

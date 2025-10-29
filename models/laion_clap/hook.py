@@ -224,9 +224,9 @@ if __name__ == "__main__":
     import numpy as np
     import time
     logging.basicConfig(level=logging.INFO)
-    device = 'cuda:0' if torch.cuda.is_available() else 'cpu'
-    model = CLAP_Module(enable_fusion=True, device=device)
-    # model.load_ckpt('/18018998051/CLAP/pretrained/630k-best.pt')
+    device = 'cuda' if torch.cuda.is_available() else 'cpu'
+    model = CLAP_Module(device=device)
+    model.load_ckpt('/18018998051/SAMWISE/pretrain/CLAP/630k-audioset-best.pt')
     audio_file = ['/18018998051/Ref-AVS/data/REFAVS/media/--iSerV5DbY_68000_78000/audio.wav']
     t1 = time.time()
     audio_embed = model.get_audio_embedding_from_filelist(audio_file)

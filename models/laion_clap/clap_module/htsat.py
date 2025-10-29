@@ -771,7 +771,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         return {'relative_position_bias_table'}
 
 
-    def forward_features(self, x, longer_idx = None):
+    def forward_features(self, x, longer_idx = None, split=False):
         # A deprecated optimization for using a hierarchical output from different blocks
 
         frames_num = x.shape[2]        
@@ -808,7 +808,6 @@ class HTSAT_Swin_Transformer(nn.Module):
             
         x = self.avgpool(x)
         x = torch.flatten(x, 1)
-
         output_dict = {
             'framewise_output': fpx, # already sigmoided
             'clipwise_output': torch.sigmoid(x),
@@ -863,7 +862,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         x = x.repeat(repeats = (1,1,4,1))
         return x
 
-    def forward(self, x: torch.Tensor, mixup_lambda = None, infer_mode = False, device=None):# out_feat_keys: List[str] = None):
+    def forward(self, x: torch.Tensor, mixup_lambda = None, infer_mode = False, device=None, split=True):# out_feat_keys: List[str] = None):
 
         if self.enable_fusion and x["longer"].sum() == 0:
             # if no audio is longer than 10s, then randomly select one audio to be longer
@@ -874,7 +873,10 @@ class HTSAT_Swin_Transformer(nn.Module):
                 x = x.transpose(1, 3)
                 x = self.bn0(x)
                 x = x.transpose(1, 3)
-                x = self.reshape_wav2img(x)
+                if split:
+                    x = self.reshape_wav2img(x[:, :, :-1, :].view(4, 10, 100, 64).permute(1, 0, 2, 3))
+                else:
+                    x = self.reshape_wav2img(x)
                 output_dict = self.forward_features(x, longer_idx=[])
                 return output_dict
                 
@@ -890,9 +892,15 @@ class HTSAT_Swin_Transformer(nn.Module):
 
             if self.training and mixup_lambda is not None:
                 x = do_mixup(x, mixup_lambda)
-                
-            x = self.reshape_wav2img(x)
-            output_dict = self.forward_features(x)
+
+            if split:
+                x = x[:, :, :-1, :]
+                bs, n, t, c = x.shape
+                x = self.reshape_wav2img(x.view(bs, 10, t // 10, c))
+                x = x.view(-1, 256, 256).unsqueeze(1)
+            else:
+                x = self.reshape_wav2img(x)
+            output_dict = self.forward_features(x, split)
         else:
             longer_list = x["longer"].to(device=device, non_blocking=True)
             x = x["mel_fusion"].to(device=device, non_blocking=True)

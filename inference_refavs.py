@@ -42,10 +42,6 @@ color_list = color_list.astype('uint8').tolist()
 
 
 def main(args):
-    args.batch_size = 1
-    print("Inference only supports for batch size = 1") 
-    print(args)
-    
     # fix the seed for reproducibility
     seed = args.seed + utils.get_rank()
     utils.init_distributed_mode(args)
@@ -70,19 +66,6 @@ def main(args):
         os.makedirs(save_visualize_path_prefix, exist_ok=True)
 
     start_time = time.time()
-    # # model
-    # model = build_samravs(args)
-    #
-    # lora_config = LoraConfig(
-    #     r=8,  # 秩 (rank)，建议在4-32之间
-    #     lora_alpha=32,  # 缩放因子
-    #     target_modules=["attn.qkv", "attn.proj"],  # 需要微调的模块
-    #     lora_dropout=0.1,
-    #     bias="none",
-    #     # task_type="FEATURE_EXTRACTION"  # SAM是分割任务，使用FEATURE_EXTRACTION
-    # )
-    #
-    # model = get_peft_model(model, lora_config)
 
     config = OmegaConf.load(args.config)
     model = instantiate(config.model, _recursive_=True)
@@ -108,15 +91,14 @@ def main(args):
         if len(unexpected_keys) > 0:
             print('Unexpected Keys: {}'.format(unexpected_keys))
 
-    # model = model.merge_and_unload()
-
-    dataset_train = build_dataset(args.dataset_file, image_set=args.split, args=args)
-    testloader = DataLoader(dataset_train, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+    dataset_test = build_dataset(args.dataset_file, image_set=args.split, args=args)
+    testloader = DataLoader(dataset_test, collate_fn=utils.collate_fn, num_workers=args.num_workers)
 
     print('Start inference')
     result = evaluate(model,
                       testloader,
-                      device
+                      device,
+                      args
                       )
 
     if args.split == 'valid_u':

@@ -31,7 +31,9 @@ class EfficientBase(nn.Module):
                  image_encoder_checkpoint = None,
                  text_encoder_checkpoint = None,
                  audio_encoder_checkpoint = None,
-                 hidden_dim = 256
+                 hidden_dim = 256,
+                 full_text = False,
+                 multi_layers = False
                  ):
         super().__init__()
         self. image_encoder = image_encoder
@@ -45,6 +47,10 @@ class EfficientBase(nn.Module):
         self.audio_projecter = nn.Linear(audio_feature_dim, hidden_dim)
         self.text_projecter = nn.Linear(text_feature_dim, hidden_dim)
         self.hidden_dim = hidden_dim
+        self.full_text = full_text
+        self.multi_layers = multi_layers
+        if self.multi_layers:
+            self.inter_text_projecter = nn.Linear(text_feature_dim, hidden_dim)
         # load image encoder parameters
         if image_encoder_checkpoint is not None:
             self.image_encoder.load_state_dict(torch.load(image_encoder_checkpoint, map_location='cpu'), strict=True)
@@ -54,6 +60,8 @@ class EfficientBase(nn.Module):
                     "4.31.0") and "embeddings.position_ids" in state_dict:
                 del state_dict["embeddings.position_ids"]
             self.text_encoder.load_state_dict(state_dict, strict=True)
+        if full_text and multi_layers:
+            self.text_encoder.config.output_hidden_states = True
         if audio_encoder_checkpoint is not None:
             self.audio_encoder.load_from(audio_encoder_checkpoint)
         # set encoders frozen
@@ -80,10 +88,21 @@ class EfficientBase(nn.Module):
     def preprocess_text_features(self, captions):
         batch_encoding_text = self.text_tokenizer(captions, add_special_tokens=True, padding=True)   # 0:BOS 1:padding 2:EOS
         input_ids = torch.tensor(batch_encoding_text['input_ids']).cuda()
-        attention_mask = torch.tensor(batch_encoding_text['attention_mask']).eq(0).cuda()
-        txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)["pooler_output"]
-        txt_prompt = self.text_projecter(txt_state)
-        return txt_prompt
+        attention_mask = torch.tensor(batch_encoding_text['attention_mask'])
+        txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask.eq(0).cuda())
+        if self.full_text:
+            if self.multi_layers:
+                txt_prompt = self.text_projecter(txt_state['last_hidden_state'])
+                inter_txt_prompt = self.inter_text_projecter(txt_state['hidden_states'][len(txt_state['hidden_states'])])
+                return txt_prompt, inter_txt_prompt, attention_mask
+            else:
+                txt_prompt = self.text_projecter(txt_state['last_hidden_state'])
+                return txt_prompt, None, attention_mask
+        else:
+            txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)["pooler_output"]
+            txt_prompt = self.text_projecter(txt_state)
+            txt_prompt = txt_prompt.unsqueeze(1)
+            return txt_prompt, None, attention_mask
         # has_pads = (torch.tensor(input_ids.device.type == "xla") or attention_mask.any())
         # x, encoder_embedding = text_encoder.forward_embedding(input_ids, None)
         # txt = x * (1 - attention_mask.unsqueeze(-1).type_as(x) * has_pads.type_as(x))
@@ -131,20 +150,20 @@ class EfficientBase(nn.Module):
     def forward(self, samples, captions, audios, targets):
         samples, (B, T), orig_size = self.preprocess_visual_features(samples, self.image_size)
         backbone_out = self.image_encoder(samples)
-        txt_embed = self.preprocess_text_features(captions)
+        txt_embed, inter_text_embed, attention_mask = self.preprocess_text_features(captions)
         if 'VGG' in self.audio_encoder.__class__.__name__:
             audio_embs = [self.preprocess_audio_features(wav_path) for wav_path in audios]
             audio_embs = torch.stack(audio_embs, dim=0).unsqueeze(2).cuda()
             audio_embs = self.audio_projecter(audio_embs)
         else:
-            # TODO HTSAT encoder的特征编码
             audio_feats = self.audio_encoder(audios)
             audio_embs = self.audio_projecter(audio_feats).unsqueeze(-2)
         vision_features, vision_pos_enc, backbone_fpn = backbone_out['vision_features'], backbone_out['vision_pos_enc'], backbone_out['backbone_fpn']
-        txt_prompt = txt_embed.view(B,1,1,-1).repeat(1, T, 1, 1)
+        txt_prompt = txt_embed.unsqueeze(1).repeat(1, T, 1, 1)
         _vision_features = vision_features.flatten(-2).permute(0, 2, 1).view(B, T, -1, self.hidden_dim)
         omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
-        prompt_embeds = self.interactor(omni_rep)
+        # TODO attenmask 实现
+        prompt_embeds = self.interactor(omni_rep, attention_mask=None)
         mask = self.decoder(backbone_fpn, prompt_embeds)
         return mask
 

@@ -115,7 +115,7 @@ def get_args_parser():
                         help="Threshold for binary mask predictions")
     # parser.add_argument('--split', default='valid', type=str, choices=['valid', 'valid_u', 'test'],
     #                     help="Dataset split for evaluation")
-    parser.add_argument('--split', default='val', type=str, choices=['val', 'test_s', 'test_u', 'test_n'],
+    parser.add_argument('--split', default='test_s', type=str, choices=['test_s', 'test_u', 'test_n'],
                         help="Dataset split for evaluation")
     parser.add_argument('--visualize', action='store_true',
                         help="Enable mask visualization during inference")
@@ -128,6 +128,8 @@ def get_args_parser():
                         help="Evaluation task type")
     parser.add_argument('--results_path', type=str,
                         help="Path to folder containing the sequences folders results")
+
+    parser.add_argument('--save_pred_masks', action='store_true', help="Save predicted masks in output_dir.")
 
     return parser
 

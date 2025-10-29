@@ -360,3 +360,19 @@ def Eval_Fmeasure(pred, gt, pr_num=255, device='cuda'):
         score = avg_f / img_num
 
     return score.max().item()
+
+
+if __name__ == '__main__':
+    # test function Eval_Fmeasure
+    test_label = torch.tensor([[[0, 0, 0, 0, 0],
+                                [0, 1, 1, 0, 0],
+                                [0, 1, 1, 0, 0],
+                                [0, 0, 0, 0, 0],
+                                [0, 0, 0, 0, 0]]], dtype=torch.float32)
+    test_pred = torch.tensor([[[0.1, 0.2, 0.3, 0.2, 0.1],
+                                [0.2, 0.8, 0.7, 0.2, 0.1],
+                                [0.1, 0.9, 0.6, 0.2, 0.2],
+                                [0.1, 0.2, 0.3, 0.2, 0.1],
+                                [0.1, 0.2, 0.1, 0.1, 0.1]]])
+    f_score = Eval_Fmeasure(test_pred, test_label, pr_num=255, device='cpu')
+    print('F-measure score:', f_score)

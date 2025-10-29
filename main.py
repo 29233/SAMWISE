@@ -78,8 +78,10 @@ def main(args):
     for k, v in model_without_ddp.named_parameters():
         if v.requires_grad:
             head.append(v)
+            print('Trained params:', k)
         else:
             fix.append(v)
+            print('Freezed params:', k)
 
     print("Trainable parameters: ", sum(p.numel() for p in head))
     print("Parameters fixed: ", sum(p.numel() for p in fix))
@@ -163,7 +165,7 @@ def main(args):
                 f.write(json.dumps(log_stats) + "\n")
         if args.eval and (epoch + 1) % 2 == 0:
             print("Start evaluation")
-            evaluate(model, testloader, device)
+            evaluate(model, testloader, device, args)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))
