@@ -88,12 +88,12 @@ class EfficientBase(nn.Module):
     def preprocess_text_features(self, captions):
         batch_encoding_text = self.text_tokenizer(captions, add_special_tokens=True, padding=True)   # 0:BOS 1:padding 2:EOS
         input_ids = torch.tensor(batch_encoding_text['input_ids']).cuda()
-        attention_mask = torch.tensor(batch_encoding_text['attention_mask'])
-        txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask.eq(0).cuda())
+        attention_mask = torch.tensor(batch_encoding_text['attention_mask']).eq(0).cuda()
+        txt_state = self.text_encoder(input_ids=input_ids, attention_mask=attention_mask)
         if self.full_text:
             if self.multi_layers:
                 txt_prompt = self.text_projecter(txt_state['last_hidden_state'])
-                inter_txt_prompt = self.inter_text_projecter(txt_state['hidden_states'][len(txt_state['hidden_states'])])
+                inter_txt_prompt = self.inter_text_projecter(txt_state['hidden_states'][len(txt_state['hidden_states']) // 2])
                 return txt_prompt, inter_txt_prompt, attention_mask
             else:
                 txt_prompt = self.text_projecter(txt_state['last_hidden_state'])
@@ -161,9 +161,15 @@ class EfficientBase(nn.Module):
         vision_features, vision_pos_enc, backbone_fpn = backbone_out['vision_features'], backbone_out['vision_pos_enc'], backbone_out['backbone_fpn']
         txt_prompt = txt_embed.unsqueeze(1).repeat(1, T, 1, 1)
         _vision_features = vision_features.flatten(-2).permute(0, 2, 1).view(B, T, -1, self.hidden_dim)
-        omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
-        # TODO attenmask 实现
-        prompt_embeds = self.interactor(omni_rep, attention_mask=None)
+        if inter_text_embed is not None:
+            omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
+            inter_text_prompt = inter_text_embed.unsqueeze(1).repeat(1, T, 1, 1)
+            inter_omni_rep = torch.cat([_vision_features, audio_embs, inter_text_prompt], dim=-2)
+            prompt_embeds = self.interactor(inter_omni_rep, omni_rep)
+        else:
+            # TODO attenmask 实现
+            omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
+            prompt_embeds = self.interactor(omni_rep)
         mask = self.decoder(backbone_fpn, prompt_embeds)
         return mask
 

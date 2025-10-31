@@ -78,10 +78,10 @@ def main(args):
     for k, v in model_without_ddp.named_parameters():
         if v.requires_grad:
             head.append(v)
-            print('Trained params:', k)
+            # print('Trained params:', k)
         else:
             fix.append(v)
-            print('Freezed params:', k)
+            # print('Freezed params:', k)
 
     print("Trainable parameters: ", sum(p.numel() for p in head))
     print("Parameters fixed: ", sum(p.numel() for p in fix))

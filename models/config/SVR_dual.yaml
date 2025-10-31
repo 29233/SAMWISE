@@ -1,4 +1,4 @@
- # @package _global_
+# @package _global_
 
 # Model
 model:
@@ -40,10 +40,10 @@ model:
     _target_: transformers.RobertaTokenizerFast.from_pretrained
     pretrained_model_name_or_path: 'pretrain/roberta'
   interactor: # 特征交互层
-    _target_: models.EfBase.interactor.Interactor
+    _target_: models.EfBase.interactor.DualInteractor
     d_model: 256
     num_heads: 8
-    num_layers: 4
+    num_layers: 6
   decoder:
     _target_: models.EfBase.head.AVSegHead
     in_channels: [256, 256, 256, 256]
@@ -61,7 +61,7 @@ model:
       _target_: models.EfBase.utils.transformer.AVSTransformer
       encoder:
         _target_: models.EfBase.utils.transformer.AVSTransformerEncoder
-        num_layers: 4
+        num_layers: 6
         layer:
           _target_: models.EfBase.utils.transformer.AVSTransformerEncoderLayer
           dim: 256
@@ -75,7 +75,8 @@ model:
           dim: 256
           ffn_dim: 2048
           dropout: 0.1
-
+  multi_layers: True
+  full_text: True
   image_size: 384
   audio_feature_dim: 128
   text_feature_dim: 768

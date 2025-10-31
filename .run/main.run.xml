@@ -1,15 +1,14 @@
 <component name="ProjectRunConfigurationManager">
-  <configuration default="false" name="TRAIN" type="PythonConfigurationType" factoryName="Python">
+  <configuration default="false" name="main" type="PythonConfigurationType" factoryName="Python">
     <module name="SAMWISE" />
     <option name="ENV_FILES" value="" />
     <option name="INTERPRETER_OPTIONS" value="" />
     <option name="PARENT_ENVS" value="true" />
     <envs>
       <env name="PYTHONUNBUFFERED" value="1" />
-      <env name="LOCAL_RANK" value="0" />
     </envs>
     <option name="SDK_HOME" value="" />
-    <option name="SDK_NAME" value="2xA800_2" />
+    <option name="SDK_NAME" value="2xA800" />
     <option name="WORKING_DIRECTORY" value="$PROJECT_DIR$" />
     <option name="IS_MODULE_SDK" value="false" />
     <option name="ADD_CONTENT_ROOTS" value="true" />
@@ -22,11 +21,11 @@
         </list>
       </option>
     </PathMappingSettings>
-    <option name="SCRIPT_NAME" value="torch.distributed.launch" />
-    <option name="PARAMETERS" value="--nproc_per_node 2 --use_env main.py --eval --config models/config/SVR_full.yaml --name_exp SVR_full_bs8 --dataset_file refavs --epochs 20 --batch_size 8 --output_dir save --resume /18018998051/SAMWISE/save/SVR_full_bs8/checkpoint_latest.pth --resume_optimizer" />
+    <option name="SCRIPT_NAME" value="$PROJECT_DIR$/main.py" />
+    <option name="PARAMETERS" value="--dataset_file refavs --config models/config/SVR_full.yaml --name_exp test --epochs 20 --batch_size 2 --lr 1e-5 --lr_drop 60000" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
-    <option name="MODULE_MODE" value="true" />
+    <option name="MODULE_MODE" value="false" />
     <option name="REDIRECT_INPUT" value="false" />
     <option name="INPUT_FILE" value="" />
     <method v="2" />
