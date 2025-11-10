@@ -20,10 +20,10 @@ class AudioEncoder(nn.Module):
         if len(unexpected_keys) > 0:
             print('Unexpected Keys: {}'.format(unexpected_keys))
 
-    def encode_audio(self, audio, device):
-        return self.audio_encoder(audio, mixup_lambda=None, device=device)
+    def encode_audio(self, audio, device, audio_inter=False):
+        return self.audio_encoder(audio, mixup_lambda=None, device=device, audio_inter=audio_inter)
 
-    def get_audio_embedding(self, data):
+    def get_audio_embedding(self, data, audio_inter=False):
         """Get the audio embedding from the model
 
         Parameters
@@ -42,11 +42,17 @@ class AudioEncoder(nn.Module):
         keys = data[0].keys()
         for k in keys:
             input_dict[k] = torch.cat([d[k].unsqueeze(0) for d in data], dim=0).to(device)
-        audio_embeds = self.encode_audio(input_dict, device=device)["embedding"]
+        audio_outs = self.encode_audio(input_dict, device=device, audio_inter=audio_inter)
+        audio_embeds = audio_outs["embedding"]
+        if audio_inter:
+            inter_embeds = audio_outs["audio_inter"]
+            inter_embeds = F.normalize(inter_embeds, dim=-1)
+        else:
+            inter_embeds = None
         audio_embeds = F.normalize(audio_embeds, dim=-1)
-        return audio_embeds
+        return audio_embeds, inter_embeds
 
-    def forward(self, x, use_tensor=True):
+    def forward(self, x, use_tensor=True, audio_inter=False):
         self.audio_encoder.eval()
         audio_input = []
         bs = len(x)
@@ -65,8 +71,10 @@ class AudioEncoder(nn.Module):
                 require_grad=audio_waveform.requires_grad
             )
             audio_input.append(temp_dict)
-        audio_embed = self.get_audio_embedding(audio_input)
+        audio_embed, inter_embed = self.get_audio_embedding(audio_input, audio_inter)
         audio_embed = audio_embed.view(bs, 10, 768)
+        if audio_inter:
+            inter_embed = inter_embed.view(bs, 10, 768)
         if not use_tensor:
             audio_embed = audio_embed.detach().cpu().numpy()
-        return audio_embed
+        return audio_embed, inter_embed

@@ -362,6 +362,18 @@ def Eval_Fmeasure(pred, gt, pr_num=255, device='cuda'):
     return score.max().item()
 
 
+def metric_s_for_null(pred):
+    assert len(pred.shape) == 3
+    num_pixels = pred.view(-1).shape[0]
+
+    temp_pred = torch.sigmoid(pred)
+    pred = (temp_pred > 0.5).int()
+
+    x = torch.sum(pred.view(-1))
+    s = torch.sqrt(x / num_pixels)
+
+    return s
+
 if __name__ == '__main__':
     # test function Eval_Fmeasure
     test_label = torch.tensor([[[0, 0, 0, 0, 0],
@@ -374,5 +386,5 @@ if __name__ == '__main__':
                                 [0.1, 0.9, 0.6, 0.2, 0.2],
                                 [0.1, 0.2, 0.3, 0.2, 0.1],
                                 [0.1, 0.2, 0.1, 0.1, 0.1]]])
-    f_score = Eval_Fmeasure(test_pred, test_label, pr_num=255, device='cpu')
+    f_score = metric_s_for_null(test_pred.unsqueeze(0))
     print('F-measure score:', f_score)

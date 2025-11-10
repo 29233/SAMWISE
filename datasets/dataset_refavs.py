@@ -48,7 +48,7 @@ class REFAVS(Dataset):
         df_one_video = self.metadata.iloc[idx]
         vid, uid, fid, caption = df_one_video['vid'], df_one_video['uid'], df_one_video['fid'], df_one_video[
             'exp']  # uid for vid.
-        vid = uid.rsplit('_', 2)[0]  # TODO: use encoded id.
+        vid, class_id, sample_id = uid.rsplit('_', 2)  # TODO: use encoded id.
 
         images = []
         mask_recs = []
@@ -84,6 +84,8 @@ class REFAVS(Dataset):
             'size': torch.as_tensor(image_sizes),
             'video_id': vid,
             'exp_id': idx,
+            'sample_id': sample_id,
+            'class_id': class_id,
             'mask_id': fid
         }
         return images, caption, audio, target

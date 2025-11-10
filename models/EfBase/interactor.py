@@ -135,6 +135,48 @@ class AddInteractor(nn.Module):
         return final_rep
 
 
+class CatInteractor(nn.Module):
+    def __init__(self,
+                 num_heads: int = 8,
+                 d_model: int = 256,
+                 num_layers: int = 6,
+                 shuffle: bool = False,
+                 ):
+        super().__init__()
+        self.d_model = d_model
+        self.shuffle = shuffle
+        self.layers = nn.Sequential(
+            *[nn.TransformerEncoderLayer(d_model, nhead=num_heads, dim_feedforward=2*d_model) for _ in range(num_layers)],
+        )
+        self.projector = nn.Linear(2 * d_model, d_model)
+
+    @staticmethod
+    def shuffle_tensor_groups(tensor, num_groups):
+        """
+        将形状为 (batch, seq_len, feature) 的张量按 seq_len 划分为 10 组（每组 146 个元素），
+        然后对这 10 组进行随机打乱（以组为单位）。
+        参数:
+            tensor: 输入张量，形状应为 (20, 1460, 256)
+        返回:
+            shuffle_tensor: 打乱后的张量，形状仍为 (20, 1460, 256)
+        """
+        # 生成随机索引（0 到 9 的随机排列）
+        indices = list(range(num_groups))
+        random.shuffle(indices)
+        # 按随机索引重新组合组
+        shuffled_groups = [tensor[:, i] for i in indices]
+        # 拼接回原始形状
+        shuffled_tensor = torch.cat(shuffled_groups, dim=1)
+        return shuffled_tensor
+
+    def forward(self, inter_omni_rep, omni_rep):
+        B, T, N, C = inter_omni_rep.shape
+        omni_rep = torch.cat([omni_rep, inter_omni_rep], dim=-1).view(B, -1, 2 * C)
+        omni_rep = self.projector(omni_rep)
+        final_rep = self.layers(omni_rep).view(B * T, N, C)
+        return final_rep
+
+
 class Interactor_with_mask(nn.Module):
     def __init__(self,
                  num_heads: int = 8,

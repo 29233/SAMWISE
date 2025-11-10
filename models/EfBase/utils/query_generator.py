@@ -79,3 +79,12 @@ class SimpleGenerator(nn.Module):
     def forward(self, prompt_feat):
         prompt_feat = torch.mean(prompt_feat[:, -2:, :], dim=1, keepdim=True)
         return prompt_feat
+
+class SimpleRepeatGenerator(nn.Module):
+    def __init__(self, query_num):
+        super().__init__()
+        self.query_num = query_num
+
+    def forward(self, prompt_feat):
+        prompt_feat = torch.mean(prompt_feat[:, 144:, :], dim=1, keepdim=True)
+        return prompt_feat.repeat(1, self.query_num, 1)

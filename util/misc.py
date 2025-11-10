@@ -529,7 +529,7 @@ def targets_to(targets: List[Dict[str, Any]], device):
         # for ["refcoco", "refcoco+", "refcocog"] evaluation
         return [{k: v.to(device)  for k, v in t.items() if k not in ["caption", "dataset_name", "original_id"]} for t in targets]
     else:
-        return [{k: (v.to(device) if k not in ["caption", "dataset_name", "original_id", "image_id", "id_tuple", "audio",'frame_ids', 'caption', 'audio', 'orig_size', 'size', 'video_id', 'exp_id', 'mask_id'] else v) for k, v in t.items() }  for t in targets]
+        return [{k: (v.to(device) if k not in ["caption", "dataset_name", "original_id", "image_id", "id_tuple", "audio",'frame_ids', 'caption', 'audio', 'orig_size', 'size', 'video_id', 'exp_id', 'mask_id', 'sample_id', 'class_id'] else v) for k, v in t.items() }  for t in targets]
 
 
 def get_total_grad_norm(parameters, norm_type=2):

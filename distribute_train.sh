@@ -1,2 +1,2 @@
 cd /18018998051/SAMWISE
-/root/anaconda3/envs/mamba/bin/python -m torch.distributed.launch --nproc_per_node 2 --use_env main.py --eval --config models/config/SVR_add.yaml --dataset_file refavs --name_exp SVR_add --epochs 20 --batch_size 4 --output_dir save --lr 1e-5 --lr_drop 60000
+/root/anaconda3/envs/mamba/bin/python -m torch.distributed.launch --nproc_per_node 2 --use_env main.py --eval --config models/config/SVR_add_q200.yaml --dataset_file refavs --name_exp SVR_add_q200 --epochs 20 --batch_size 4 --output_dir save --lr 1e-5 --lr_drop 60000 --eval

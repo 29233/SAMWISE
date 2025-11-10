@@ -33,7 +33,8 @@ class EfficientBase(nn.Module):
                  audio_encoder_checkpoint = None,
                  hidden_dim = 256,
                  full_text = False,
-                 multi_layers = False
+                 multi_layers = False,
+                audio_inter = False
                  ):
         super().__init__()
         self. image_encoder = image_encoder
@@ -43,8 +44,11 @@ class EfficientBase(nn.Module):
         self.interactor = interactor
         self.decoder = decoder
         self.image_size = image_size
+        self.audio_inter = audio_inter
 
         self.audio_projecter = nn.Linear(audio_feature_dim, hidden_dim)
+        if self.audio_inter:
+            self.inter_audio_projecter = nn.Linear(audio_feature_dim, hidden_dim)
         self.text_projecter = nn.Linear(text_feature_dim, hidden_dim)
         self.hidden_dim = hidden_dim
         self.full_text = full_text
@@ -155,21 +159,28 @@ class EfficientBase(nn.Module):
             audio_embs = [self.preprocess_audio_features(wav_path) for wav_path in audios]
             audio_embs = torch.stack(audio_embs, dim=0).unsqueeze(2).cuda()
             audio_embs = self.audio_projecter(audio_embs)
+            inter_audio_embed = audio_embs
         else:
-            audio_feats = self.audio_encoder(audios)
+            audio_feats, inter_audio_embed = self.audio_encoder(audios, use_tensor=True, audio_inter=self.audio_inter)
             audio_embs = self.audio_projecter(audio_feats).unsqueeze(-2)
+            if self.audio_inter:
+                inter_audio_embed = self.inter_audio_projecter(audio_feats).unsqueeze(-2)
+            else:
+                inter_audio_embed = audio_embs
         vision_features, vision_pos_enc, backbone_fpn = backbone_out['vision_features'], backbone_out['vision_pos_enc'], backbone_out['backbone_fpn']
         txt_prompt = txt_embed.unsqueeze(1).repeat(1, T, 1, 1)
         _vision_features = vision_features.flatten(-2).permute(0, 2, 1).view(B, T, -1, self.hidden_dim)
         if inter_text_embed is not None:
             omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
             inter_text_prompt = inter_text_embed.unsqueeze(1).repeat(1, T, 1, 1)
-            inter_omni_rep = torch.cat([_vision_features, audio_embs, inter_text_prompt], dim=-2)
+            inter_omni_rep = torch.cat([_vision_features, inter_audio_embed, inter_text_prompt], dim=-2)
             prompt_embeds = self.interactor(inter_omni_rep, omni_rep)
         else:
             # TODO attenmask 实现
             omni_rep = torch.cat([_vision_features, audio_embs, txt_prompt], dim=-2)
             prompt_embeds = self.interactor(omni_rep)
+            if isinstance(prompt_embeds, tuple):
+                prompt_embeds  = prompt_embeds[0]
         mask = self.decoder(backbone_fpn, prompt_embeds)
         return mask
 

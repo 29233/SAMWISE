@@ -145,7 +145,7 @@ def main(args):
                     model, data_loader_train, optimizer, device, epoch,
                     args.clip_max_norm, lr_scheduler=lr_scheduler, args=args)
 
-        if args.output_dir:
+        if args.output_dir and (epoch + 1) % 2 == 0:
             print("Save Model")
             checkpoint_paths = [output_dir / 'checkpoint_latest.pth']
             checkpoint_paths.append(output_dir / f'checkpoint{epoch:04}.pth')
@@ -165,7 +165,14 @@ def main(args):
                 f.write(json.dumps(log_stats) + "\n")
         if args.eval and (epoch + 1) % 2 == 0:
             print("Start evaluation")
-            evaluate(model, testloader, device, args)
+            if epoch + 1 == args.epochs:
+                args.save_pred_masks = True
+                dataset_unseen = build_dataset(args.dataset_file, image_set='test_u', args=args)
+                testloader_unseen = DataLoader(dataset_unseen, collate_fn=utils.collate_fn, num_workers=args.num_workers)
+                evaluate(model, testloader, device, args)
+                evaluate(model, testloader_unseen, device, args)
+            else:
+                evaluate(model, testloader, device, args)
 
     total_time = time.time() - start_time
     total_time_str = str(datetime.timedelta(seconds=int(total_time)))

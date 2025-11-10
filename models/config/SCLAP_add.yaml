@@ -1,0 +1,93 @@
+ # @package _global_
+
+# Model
+model:
+  _target_: models.EfBase.base.EfficientBase
+  image_encoder:
+    _target_: models.sam2.modeling.backbones.image_encoder.ImageEncoder
+    scalp: 0
+    trunk:
+      _target_: models.sam2.modeling.backbones.hieradet.Hiera
+      embed_dim: 144
+      num_heads: 2
+      stages: [2, 6, 36, 4]
+      global_att_blocks: [23, 33, 43]
+      window_pos_embed_bkg_spatial_size: [7, 7]
+      window_spec: [8, 4, 16, 8]
+    neck:
+      _target_: models.sam2.modeling.backbones.image_encoder.FpnNeck
+      position_encoding:
+        _target_: models.sam2.modeling.position_encoding.PositionEmbeddingSine
+        num_pos_feats: 256
+        normalize: true
+        scale: null
+        temperature: 10000
+      d_model: 256
+      backbone_channel_list: [1152, 576, 288, 144]
+      fpn_top_down_levels: [2, 3]  # output level 0 and 1 directly use the backbone features
+      fpn_interp_model: nearest
+  text_encoder:
+    _target_: transformers.RobertaModel.from_pretrained
+    pretrained_model_name_or_path: 'pretrain/roberta-base'
+  audio_encoder:
+    _target_: models.laion_clap.AudioEncoder.AudioEncoder
+    encoder_model:
+      _target_: models.laion_clap.clap_module.htsat.HTSAT_Swin_Transformer
+      spec_size: 256
+      patch_size: 4
+      patch_stride: [4, 4]
+      num_classes: 527
+      embed_dim: 96
+      depths: [2,2,6,2]
+      num_heads: [4,8,16,32]
+      window_size: 8
+      config: {'audio_length': 1024, 'class_num': 527, 'clip_samples': 480000, 'fmax': 14000, 'fmin': 50, 'hop_size': 480, 'mel_bins': 64, 'model_name': 'tiny', 'model_type': 'HTSAT', 'sample_rate': 48000, 'window_size': 1024}
+      enable_fusion: False
+      fusion_type: None
+  text_tokenizer:
+    _target_: transformers.RobertaTokenizerFast.from_pretrained
+    pretrained_model_name_or_path: 'pretrain/roberta-base'
+  interactor: # 特征交互层
+    _target_: models.EfBase.interactor.CatInteractor
+    d_model: 256
+    num_heads: 8
+    num_layers: 6
+  decoder:
+    _target_: models.EfBase.head.AVSegHead
+    in_channels: [256, 256, 256, 256]
+    num_classes: 1
+    query_num: 300
+    use_learnable_queries: True
+    query_generator:
+      _target_: models.EfBase.utils.query_generator.AttentionGenerator
+      num_layers: 6
+      query_num: 300
+    positional_encoding:
+      _target_: models.EfBase.utils.positional_encoding.SinePositionalEncoding
+      num_feats: 128
+    transformer:
+      _target_: models.EfBase.utils.transformer.AVSTransformer
+      encoder:
+        _target_: models.EfBase.utils.transformer.AVSTransformerEncoder
+        num_layers: 6
+        layer:
+          _target_: models.EfBase.utils.transformer.AVSTransformerEncoderLayer
+          dim: 256
+          ffn_dim: 2048
+          dropout: 0.1
+      decoder:
+        _target_: models.EfBase.utils.transformer.AVSTransformerDecoder
+        num_layers: 6
+        layer:
+          _target_: models.EfBase.utils.transformer.AVSTransformerDecoderLayer
+          dim: 256
+          ffn_dim: 2048
+          dropout: 0.1
+  multi_layers: True
+  full_text: True
+  image_size: 384
+  audio_feature_dim: 768
+  text_feature_dim: 768
+  image_encoder_checkpoint: '/18018998051/SAMWISE/pretrain/sam2_image_encoder_weights.pth'
+  audio_encoder_checkpoint: '/18018998051/SAMWISE/pretrain/CLAP/CLAP_audio_encoder.pth'
+  text_encoder_checkpoint: '/18018998051/SAMWISE/pretrain/CLAP/CLAP_text_encoder.pth'

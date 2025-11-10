@@ -14,7 +14,7 @@ def get_args_parser():
                         help="Number of frames per training clip")
     parser.add_argument('--weight_decay', default=0, type=float,
                         help="Weight decay (L2 regularization)")
-    parser.add_argument('--epochs', default=6, type=int,
+    parser.add_argument('--epochs', default=20, type=int,
                         help="Number of training epochs")
     parser.add_argument('--lr_drop', default=[60000], type=int, nargs='+',
                         help="Epochs at which learning rate should drop")

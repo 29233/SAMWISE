@@ -23,7 +23,7 @@
       </option>
     </PathMappingSettings>
     <option name="SCRIPT_NAME" value="torch.distributed.launch" />
-    <option name="PARAMETERS" value="--nproc_per_node 2 --use_env main.py --eval --config models/config/SVR_full.yaml --name_exp SVR_full_bs8 --dataset_file refavs --epochs 20 --batch_size 8 --output_dir save --resume /18018998051/SAMWISE/save/SVR_full_bs8/checkpoint_latest.pth --resume_optimizer" />
+    <option name="PARAMETERS" value="--nproc_per_node 2 --use_env main.py --eval --config models/config/DCLAP_add.yaml --name_exp DCLAP_add --dataset_file refavs --epochs 20 --batch_size 8" />
     <option name="SHOW_COMMAND_LINE" value="false" />
     <option name="EMULATE_TERMINAL" value="false" />
     <option name="MODULE_MODE" value="true" />

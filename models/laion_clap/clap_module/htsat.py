@@ -727,7 +727,9 @@ class HTSAT_Swin_Transformer(nn.Module):
             self.layers.append(layer)
 
         self.norm = self.norm_layer(self.num_features)
+        self.inter_norm = nn.LayerNorm(self.num_features)
         self.avgpool = nn.AdaptiveAvgPool1d(1)
+        self.inter_avgpool = nn.AdaptiveAvgPool1d(1)
         self.maxpool = nn.AdaptiveMaxPool1d(1)
         
         SF = self.spec_size // (2 ** (len(self.depths) - 1)) // self.patch_stride[0] // self.freq_ratio
@@ -771,7 +773,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         return {'relative_position_bias_table'}
 
 
-    def forward_features(self, x, longer_idx = None, split=False):
+    def forward_features(self, x, longer_idx = None, split=False, audio_inter=False):
         # A deprecated optimization for using a hierarchical output from different blocks
 
         frames_num = x.shape[2]        
@@ -779,8 +781,14 @@ class HTSAT_Swin_Transformer(nn.Module):
         if self.ape:
             x = x + self.absolute_pos_embed
         x = self.pos_drop(x)
+        inter_layer = -1
+        output = None
+        if audio_inter:
+            inter_layer=len(self.layers) // 2
         for i, layer in enumerate(self.layers):
             x, attn = layer(x)
+            if i == inter_layer:
+                output = x
         # for x
         x = self.norm(x)
         B, N, C = x.shape
@@ -795,7 +803,25 @@ class HTSAT_Swin_Transformer(nn.Module):
         # get latent_output
         fine_grained_latent_output = torch.mean(x, dim = 2)
         fine_grained_latent_output = interpolate(fine_grained_latent_output.permute(0,2,1).contiguous(), 8 * self.patch_stride[1]) 
-        
+
+        if audio_inter:
+            output = self.inter_norm(output)
+            B, N, C = output.shape
+            SF = frames_num // (2 ** (len(self.depths) - 1)) // self.patch_stride[0]
+            ST = frames_num // (2 ** (len(self.depths) - 1)) // self.patch_stride[1]
+            output = output.permute(0, 2, 1).contiguous().reshape(B, C, SF, ST)
+            B, C, F, T = output.shape
+            # group 2D CNN
+            c_freq_bin = F // self.freq_ratio
+            output = output.reshape(B, C, F // c_freq_bin, c_freq_bin, T)
+            output = output.permute(0, 1, 3, 2, 4).contiguous().reshape(B, C, c_freq_bin, -1)
+            # get latent_output
+            fine_grained_latent_output = torch.mean(output, dim=2)
+            fine_grained_latent_output = interpolate(fine_grained_latent_output.permute(0, 2, 1).contiguous(),
+                                                     8 * self.patch_stride[1])
+            inter_output = self.inter_avgpool(torch.flatten(output,2))
+            inter_output = torch.flatten(inter_output, 1)
+
         latent_output = self.avgpool(torch.flatten(x,2))
         latent_output = torch.flatten(latent_output, 1)
 
@@ -814,6 +840,8 @@ class HTSAT_Swin_Transformer(nn.Module):
             'fine_grained_embedding': fine_grained_latent_output,
             'embedding': latent_output
         }
+        if audio_inter:
+            output_dict['audio_inter'] = inter_output
 
         return output_dict
 
@@ -862,7 +890,7 @@ class HTSAT_Swin_Transformer(nn.Module):
         x = x.repeat(repeats = (1,1,4,1))
         return x
 
-    def forward(self, x: torch.Tensor, mixup_lambda = None, infer_mode = False, device=None, split=True):# out_feat_keys: List[str] = None):
+    def forward(self, x: torch.Tensor, mixup_lambda = None, infer_mode = False, device=None, split=True, audio_inter=False):# out_feat_keys: List[str] = None):
 
         if self.enable_fusion and x["longer"].sum() == 0:
             # if no audio is longer than 10s, then randomly select one audio to be longer
@@ -900,7 +928,7 @@ class HTSAT_Swin_Transformer(nn.Module):
                 x = x.view(-1, 256, 256).unsqueeze(1)
             else:
                 x = self.reshape_wav2img(x)
-            output_dict = self.forward_features(x, split)
+            output_dict = self.forward_features(x, split, audio_inter=audio_inter)
         else:
             longer_list = x["longer"].to(device=device, non_blocking=True)
             x = x["mel_fusion"].to(device=device, non_blocking=True)
@@ -939,7 +967,7 @@ class HTSAT_Swin_Transformer(nn.Module):
                 x = do_mixup(x, mixup_lambda)
 
             x = self.reshape_wav2img(x)
-            output_dict = self.forward_features(x, longer_idx = longer_list_idx)
+            output_dict = self.forward_features(x, longer_idx = longer_list_idx, audio_inter=audio_inter)
        
         # if infer_mode:
         #     # in infer mode. we need to handle different length audio input
